@@ -27,7 +27,7 @@
 #include <sys/stat.h>
 
 #include "segmenter.h"
-#include "libavformat/avformat.h"
+#include <libavformat/avformat.h>
 
 #define IMAGE_ID3_SIZE 9171
 
@@ -94,133 +94,6 @@ void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts) {
     //TODO 33rd bit????
 }
 
-void debugReturnCode(int r) {
-    switch (r) {
-#if USE_OLD_FFMPEG
-        case AVERROR_UNKNOWN:
-#else
-        case AVERROR(EINVAL):
-#endif
-            /**< unknown error */
-            fprintf(stderr, "Unknown error.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_IO:
-#else
-        case AVERROR(EIO):
-#endif             
-            /**< I/O error */
-            fprintf(stderr, "I/O error.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NUMEXPECTED:
-#else
-        case AVERROR(EDOM):
-#endif			    
-            /**< Number syntax expected in filename. */
-            fprintf(stderr, "Number syntax expected in filename.\n");
-            break;
-        case AVERROR_INVALIDDATA:
-            /**< invalid data found */
-            fprintf(stderr, "Invalid data found.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOMEM:
-#else
-        case AVERROR(ENOMEM):
-#endif        
-            /**< not enough memory */
-            fprintf(stderr, "Not enough memory.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOFMT:
-#else
-        case AVERROR(EILSEQ):
-#endif         
-            /**< unknown format */
-            fprintf(stderr, "Unknown format.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOTSUPP:
-#else
-        case AVERROR(ENOSYS):
-#endif       
-            /**< Operation not supported. */
-            fprintf(stderr, "Operation not supported.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOENT:
-#else
-        case AVERROR(ENOENT):
-#endif        
-            /**< No such file or directory. */
-            fprintf(stderr, "No such file or directory.\n");
-            break;
-        case AVERROR_EOF:
-            /**< End of file. */
-            fprintf(stderr, "End of file.\n");
-            break;
-        case AVERROR_PATCHWELCOME:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Not yet implemented in FFmpeg. Patches welcome.\n");
-            break;
-#if USE_OLD_FFMPEG
-            /**< Codes For Old FFMPEG Deprecated. */
-#else
-            /**< New Error Codes For FFMPEG. */
-        case AVERROR_BUG:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG\n");
-            break;
-        case AVERROR_BUG2:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG2.\n");
-            break;
-        case AVERROR_STREAM_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Stream not found.\n");
-            break;
-        case AVERROR_PROTOCOL_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Protocol not found.\n");
-            break;
-        case AVERROR_OPTION_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Option not found.\n");
-            break;
-        case AVERROR_MUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Muxer not found. \n");
-            break;
-        case AVERROR_FILTER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Filter not found.\n");
-            break;
-        case AVERROR_EXIT:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Immediate exit was requested; the called function should not be restarted.\n");
-            break;
-        case AVERROR_ENCODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Encoder not found.\n");
-            break;
-        case AVERROR_DEMUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Demuxer not found.\n");
-            break;
-        case AVERROR_DECODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Decoder not found.\n");
-            break;
-        case AVERROR_BSF_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Bitstream filter not found.\n");
-            break;
-#endif	
-        default:
-            fprintf(stderr, "Unknown return code: %d\n", r);
-    }
-}
 
 void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
     FILE * outputFile;
@@ -286,6 +159,8 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
             output_codec_context->height = input_codec_context->height;
             output_codec_context->has_b_frames = input_codec_context->has_b_frames;
 
+			
+			
             break;
         default:
             break;
@@ -406,7 +281,7 @@ int main(int argc, const char *argv[]) {
 	if (version || usage) return 0;
 
 
-    fprintf(stderr, "%s %s\n", playlistFilename, tempPlaylistName);
+    //fprintf(stderr, "%s %s\n", playlistFilename, tempPlaylistName);
 
 	if (doid3) {
 		image_id3_tag = malloc(IMAGE_ID3_SIZE);
@@ -428,23 +303,28 @@ int main(int argc, const char *argv[]) {
     exit(1);
     } */
 
-    av_log_set_level(AV_LOG_DEBUG);
+	
+
+    av_log_set_level(verbosity);
 
     av_register_all();
-    ret = avformat_open_input(&ic, inputFilename, NULL, NULL);
+
+	AVBitStreamFilterContext* bsf_h264_mp4toannexb= NULL;
+	
+	ret = avformat_open_input(&ic, inputFilename, NULL, NULL);
     if (ret != 0) {
-        fprintf(stderr, "Could not open input file %s. Error %d.\n", inputFilename, ret);
+        fprintf(stderr, "ERROR: Could not open input file %s. Error %d.\n", inputFilename, ret);
         exit(1);
     }
 
     if (avformat_find_stream_info(ic, NULL) < 0) {
-        fprintf(stderr, "Could not read stream information.\n");
+        fprintf(stderr, "ERROR: Could not read stream information.\n");
         exit(1);
     }
 
     oc = avformat_alloc_context();
     if (!oc) {
-        fprintf(stderr, "Could not allocate output context.");
+        fprintf(stderr, "ERROR: Could not allocate output context.");
         exit(1);
     }
 
@@ -458,10 +338,11 @@ int main(int argc, const char *argv[]) {
 #else
             case AVMEDIA_TYPE_VIDEO:
 #endif
-                video_index = i;
-                ic->streams[i]->discard = AVDISCARD_NONE;
-                if (outputStreams & OUTPUT_STREAM_VIDEO)
-                    video_st = add_output_stream(oc, ic->streams[i]);
+				video_index = i;
+				ic->streams[i]->discard = AVDISCARD_NONE;
+				if (outputStreams & OUTPUT_STREAM_VIDEO) {
+					video_st = add_output_stream(oc, ic->streams[i]);
+				}
                 break;
 #ifdef USE_OLD_FFMPEG
             case CODEC_TYPE_AUDIO:
@@ -525,13 +406,22 @@ int main(int argc, const char *argv[]) {
         }
      */
 
+    av_dump_format(ic, 0, inputFilename, 0);
     av_dump_format(oc, 0, baseFileName, 1);
 
 
     //open the video codec only if there is video data
     if (video_index != -1) {
+		ret =0;
         if (outputStreams & OUTPUT_STREAM_VIDEO)
             codec = avcodec_find_decoder(video_st->codec->codec_id);
+			if (codec && strcmp("h264",codec->name)==0) {
+				fprintf(stderr, "DEBUG: Output codec is h264 trying to use  h264_mp4toannexb bitstream filter\n");
+				bsf_h264_mp4toannexb=av_bitstream_filter_init ("h264_mp4toannexb");
+				if (!bsf_h264_mp4toannexb) {
+					fprintf(stderr, "WARN: Could not open h264_mp4toannexb bitstream filter!\n");
+				} else fprintf(stderr, "DEBUG: h264_mp4toannexb bitstream filter opened :) !\n");
+			}
         else
             codec = avcodec_find_decoder(ic->streams[video_index]->codec->codec_id);
         if (!codec) {
@@ -546,6 +436,7 @@ int main(int argc, const char *argv[]) {
             fprintf(stderr, "Could not open video decoder, key frames will not be honored.\n");
         }
     }
+
 
     snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 
@@ -656,6 +547,38 @@ int main(int argc, const char *argv[]) {
                 //printf("%lf %lld %lld %lld %lld %lld %lf\n", segment_time, audio_st->pts.val, audio_st->cur_dts, audio_st->cur_pkt.pts, packet.pts, packet.dts, packet.dts * av_q2d(ic->streams[audio_index]->time_base) );
                 newFile = 0;
             }
+            
+			if (bsf_h264_mp4toannexb) { //try bitstream filter apply:
+				//code adapted from  write_frame @ avconv.c from libav sources:
+				AVPacket new_pkt;
+				av_init_packet(&new_pkt);
+				new_pkt.pts=packet.pts;
+				new_pkt.dts=packet.dts;
+				new_pkt.destruct = av_destruct_packet;
+				new_pkt.stream_index=video_st->index;
+				new_pkt.flags = packet.flags;
+				new_pkt.duration=packet.duration;
+				new_pkt.data=packet.data;
+				new_pkt.size=packet.size;
+				int a = av_bitstream_filter_filter(bsf_h264_mp4toannexb, video_st->codec, NULL,
+													&new_pkt.data, &new_pkt.size,
+													packet.data, packet.size,
+													packet.flags & AV_PKT_FLAG_KEY);
+				if (a > 0) {
+					av_free_packet(&packet);
+					packet = new_pkt;
+				} else if (a < 0) {
+					av_free_packet(&new_pkt);
+// 					fprintf(stderr, "ERROR: Bitstream filter %s failed for stream %d, codec %s\n",
+// 						bsf_h264_mp4toannexb->filter->name, packet.stream_index,
+// 						video_st->codec->codec ? video_st->codec->codec->name : "copy"
+// 					);
+// 
+// 					exit(1);
+				}
+			}
+            
+            
             if (outputStreams == OUTPUT_STREAM_VIDEO)
                 ret = av_write_frame(oc, &packet);
             else

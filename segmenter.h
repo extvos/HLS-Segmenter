@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2012 Stoian Ivanov
  * Copyright (c) 2009 Chase Douglas
- *
+ * Copyright (c) 2012 Stoian Ivanov 
+ * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation.
@@ -41,8 +41,12 @@ extern "C" {
 #ifdef  __cplusplus
 }
 #endif
+
+//options_parsing.c
 void printBanner();
 void printUsage();
 int parseCommandLine(char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * outputStreams, int * segmentLength, int * verbosity, int * version, int * usage,int * doid3tag, int argc, const char * argv[]);
 
+//debugs.c:
+void debugReturnCode(int r);
 #endif

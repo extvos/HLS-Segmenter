@@ -30,6 +30,8 @@
 
 
 #include "segmenter.h"
+#include "libavformat/avformat.h"
+
 //Type of options detected
 typedef enum {
 	INPUT_FILE, OUTPUT_FILE, OUTPUT_DIR, OUTPUT_BASE_NAME,SEGMENT_LENGTH,
@@ -68,6 +70,7 @@ void printUsage() {
 	fprintf(stderr, "-t\t\t\tEnable id3 tagging code (EXPERIMENTAL)\n");
 	fprintf(stderr, "-a\t\t\taudio only decode for < 64k streams.\n");
 	fprintf(stderr, "-v\t\t\tvideo only decode for < 64k streams.\n\n");
+	fprintf(stderr, "--log <level>\t\tVerbosity level for libav Default ERROR, options (case insensitive) are QUIET,PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG.\n\n");
 	fprintf(stderr, "--version\t\tPrint version details and exit.\n");
 	fprintf(stderr, "-h,--help\t\tPrint this info.\n");
 	fprintf(stderr, "\n\n");
@@ -212,7 +215,16 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
         optionIndex++;
 		return ENABLE_ID3TAGS;
 	}
-	
+	if (strcmp(argv[optionIndex],"--log")==0) {
+		if (!hasnext){
+            fprintf(stderr,"ERROR: length must be given after --log\n");
+            return INVALID;
+		}		
+        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH - 1);
+        option[MAX_FILENAME_LENGTH - 1] = 0;
+		optionIndex++;
+		return OUTPUT_VERBOSITY;
+	}
 	fprintf(stderr, "ERROR: Unknown option %s\n",argv[optionIndex]);
 	
     return INVALID;
@@ -241,12 +253,14 @@ int parseCommandLine(
     char option[MAX_FILENAME_LENGTH];
 
     //default video and audio output
-    *verbosity = 0;
+    *verbosity = AV_LOG_ERROR;
     *version = 0;
 	*usage = 0;
 	*doid3tag = 0;
     *outputStreams = OUTPUT_STREAM_AV;
     strncpy(baseExtension, ".ts", strlen(".ts"));
+	
+	
 
     while (1) {
         result = getNextOption(argc, argv, option);
@@ -290,8 +304,20 @@ int parseCommandLine(
             case SEGMENT_LENGTH:
                 *segmentLength = strtol(option, NULL, 10);
                 requiredOptions[OUTPUT_SEGMENT_LENGTH_INDEX] = 1;
+				break;
             case OUTPUT_VERBOSITY:
-                *verbosity = strtol(option, NULL, 10);
+				if (strcasecmp ("QUIET", option)==0) *verbosity=AV_LOG_QUIET;
+				else if (strcasecmp ("PANIC", option)==0) *verbosity=AV_LOG_PANIC;
+				else if (strcasecmp ("FATAL", option)==0) *verbosity=AV_LOG_FATAL;
+				else if (strcasecmp ("ERROR", option)==0) *verbosity=AV_LOG_ERROR;
+				else if (strcasecmp ("WARNING", option)==0) *verbosity=AV_LOG_WARNING;
+				else if (strcasecmp ("INFO", option)==0) *verbosity=AV_LOG_INFO;
+				else if (strcasecmp ("VERBOSE", option)==0) *verbosity=AV_LOG_VERBOSE;
+				else if (strcasecmp ("DEBUG", option)==0) *verbosity=AV_LOG_DEBUG;
+				else {
+					fprintf(stderr, "ERROR: Unknown log level %s Valid options are: QUIET,PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG\n",option);
+					return -1;
+				}
                 break;
             case VERSION:
                 *version = 1;
