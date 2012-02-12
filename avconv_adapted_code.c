@@ -1,4 +1,4 @@
-/ *
+/*
  * Copyright (c) 2000-2011 The libav developers.
  * Copyright (c) 2012 Stoian Ivanov 
  *
@@ -14,21 +14,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- * /
+ */
 
-/ **********************************************************************************
+/**********************************************************************************
  * This code is adapted from the original avconv.c from libav project
- ********************************************************************************** /
+ **********************************************************************************/
 
-/ **********************************************************************************
+/**********************************************************************************
  * This code is part of HTTP-Live-Video-Stream-Segmenter-and-Distributor
  * look for newer versions at github.com
- ********************************************************************************** /
+ **********************************************************************************/
 
-
-#include <libavformat/avformat.h>
+#include "segmenter.h"
+#include <stdio.h>
 /*
- 
  
 
 typedef struct InputStream {
@@ -144,39 +143,32 @@ typedef struct OutputFile {
 
 */
  
- 
-typedef struct do_streamcopy_opts {
-	int64_t ost_tb_start_time, 
-	int64_t last_dts,
-	int skiptokeyframe,
-	AVBitStreamFilterContext * bitstream_filters,
-	int interleave_write
-} do_streamcopy_opts;
 
-static void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, const AVPacket *pkt, do_streamcopy_opts* opts)
+
+void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, const AVPacket *pkt, do_streamcopy_opts* opts)
 {
     //OutputFile *of = &output_files[ost->file_index];
     //int64_t ost_tb_start_time = av_rescale_q(of->start_time, AV_TIME_BASE_Q, ost->st->time_base);
-    AVPacket opkt;
 
-    av_init_packet(&opkt);
-
-    if (opts->skiptokeyframe  && !(pkt->flags & AV_PKT_FLAG_KEY))) return;
+    if (opts->skiptokeyframe  && !(pkt->flags & AV_PKT_FLAG_KEY)) return;
 	opts->skiptokeyframe=0;
 
+    AVPacket opkt;
+    av_init_packet(&opkt);
 
-    if (pkt->pts != AV_NOPTS_VALUE)
-        opkt.pts = av_rescale_q(pkt->pts, i_st->time_base, o_st->time_base) - ost_tb_start_time;
-    else
+    if (pkt->pts != AV_NOPTS_VALUE) {
+        opkt.pts = av_rescale_q(pkt->pts, i_st->time_base, o_st->time_base) - opts->ost_tb_start_time;
+		opts->last_pts=opkt.pts;
+	} else
         opkt.pts = AV_NOPTS_VALUE;
 
     if (pkt->dts == AV_NOPTS_VALUE) {
-        opkt.dts = av_rescale_q(opts->last_dts, AV_TIME_BASE_Q, o_st->time_base);
+        opkt.dts =opts->last_dts;
 	} else {
-		opts->last_dts=pkt->dts;
         opkt.dts = av_rescale_q(pkt->dts, i_st->time_base, o_st->time_base);
+		opts->last_dts=opkt.dts;
 	}
-    opkt.dts -= ost_tb_start_time;
+    opkt.dts -= opts->ost_tb_start_time;
 
     opkt.duration = av_rescale_q(pkt->duration, i_st->time_base, o_st->time_base);
     opkt.flags    = pkt->flags;
@@ -193,25 +185,25 @@ static void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fct
         opkt.size = pkt->size;
     }
 
-    write_frame(o_fctx, &opkt, ost);
+    write_frame(o_fctx, &opkt, o_st, opts);
     o_st->codec->frame_number++;
     av_free_packet(&opkt);
 }
 
 
-static void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_streamcopy_opts* opts)
+ void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_streamcopy_opts* opts)
 {
     AVBitStreamFilterContext *bsfc = opts->bitstream_filters;
     AVCodecContext          *avctx = o_st->codec;
     int ret;
 
-    / *
+    /*
      * Audio encoders may split the packets --  #frames in != #packets out.
      * But there is no reordering, so we can limit the number of output packets
      * by simply dropping them here.
      * Counting encoded video frames needs to be done separately because of
      * reordering, see do_video_out()
-     * /
+     */
 
 
     while (bsfc) {
@@ -227,9 +219,9 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_st
             av_log(NULL, AV_LOG_ERROR, "%s failed for stream %d, codec %s",
                    bsfc->filter->name, pkt->stream_index,
                    avctx->codec ? avctx->codec->name : "copy");
-            print_error("", a);
-            if (exit_on_error)
-                exit_program(1);
+			
+            //print_error("", a);
+            //if (exit_on_error) exit_program(1);
         }
         *pkt = new_pkt;
 
@@ -245,7 +237,7 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_st
 	}
 	
     if (ret < 0) {
-        print_error("av_interleaved_write_frame()", ret);
-        exit_program(1);
+        fprintf (stderr,"ERROR: av_interleaved_write_frame() got error: %d", ret);
+        //exit_program(1);
     }
 }

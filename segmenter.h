@@ -27,6 +27,9 @@
 extern "C" {
 #endif
 
+#include <stdlib.h>
+#include <stdint.h>
+#include <libavformat/avformat.h>
 
 
 #define PROGRAM_VERSION "0.1"
@@ -49,4 +52,22 @@ int parseCommandLine(char * inputFile, char * outputFile, char * baseDir, char *
 
 //debugs.c:
 void debugReturnCode(int r);
+
+//avconv_adapted_code.c
+
+ 
+typedef struct do_streamcopy_opts {
+	int64_t ost_tb_start_time;
+	int64_t last_dts;
+	int64_t last_pts;
+	int skiptokeyframe;
+	AVBitStreamFilterContext * bitstream_filters;
+	int interleave_write;
+} do_streamcopy_opts;
+
+
+void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_streamcopy_opts* opts);
+void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, const AVPacket *pkt, do_streamcopy_opts* opts);
+
+
 #endif
