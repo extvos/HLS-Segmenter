@@ -270,6 +270,8 @@ int main(int argc, const char *argv[]) {
     unsigned char id3_tag[128];
     unsigned char * image_id3_tag;
 
+	do_streamcopy_opts video_opts, audio_opts;
+	
     size_t id3_tag_size = 73;
     int newFile = 1; //a boolean value to flag when a new file needs id3 tag info in it
 

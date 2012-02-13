@@ -149,26 +149,24 @@ void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, cons
 {
     //OutputFile *of = &output_files[ost->file_index];
     //int64_t ost_tb_start_time = av_rescale_q(of->start_time, AV_TIME_BASE_Q, ost->st->time_base);
-
+    if (pkt->pts != AV_NOPTS_VALUE) opts->last_pts=pkt->pts;
+    if (pkt->dts != AV_NOPTS_VALUE) opts->last_dts=av_rescale_q(pkt->dts, i_st->time_base, o_st->time_base);
+	
     if (opts->skiptokeyframe  && !(pkt->flags & AV_PKT_FLAG_KEY)) return;
-	opts->skiptokeyframe=0;
+	if (opts->skiptokeyframe) {
+		opts->ost_tb_start_time=av_rescale_q(opts->last_pts, i_st->time_base, o_st->time_base);
+		opts->skiptokeyframe=0;
+	}
 
     AVPacket opkt;
     av_init_packet(&opkt);
 
     if (pkt->pts != AV_NOPTS_VALUE) {
         opkt.pts = av_rescale_q(pkt->pts, i_st->time_base, o_st->time_base) - opts->ost_tb_start_time;
-		opts->last_pts=opkt.pts;
 	} else
         opkt.pts = AV_NOPTS_VALUE;
 
-    if (pkt->dts == AV_NOPTS_VALUE) {
-        opkt.dts =opts->last_dts;
-	} else {
-        opkt.dts = av_rescale_q(pkt->dts, i_st->time_base, o_st->time_base);
-		opts->last_dts=opkt.dts;
-	}
-    opkt.dts -= opts->ost_tb_start_time;
+    opkt.dts =opts->last_dts - opts->ost_tb_start_time;
 
     opkt.duration = av_rescale_q(pkt->duration, i_st->time_base, o_st->time_base);
     opkt.flags    = pkt->flags;
