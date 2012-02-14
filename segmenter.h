@@ -65,6 +65,11 @@ typedef struct do_streamcopy_opts {
 	int interleave_write;
 } do_streamcopy_opts;
 
+#ifdef segmenter_h_declare_segmenter_c
+int verbosity;
+#else 
+extern int verbosity; 
+#endif
 
 void write_frame(AVFormatContext *s, AVPacket *pkt, AVStream *o_st, do_streamcopy_opts* opts);
 void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, const AVPacket *pkt, do_streamcopy_opts* opts);

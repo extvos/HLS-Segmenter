@@ -160,7 +160,8 @@ void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, cons
 
     AVPacket opkt;
     av_init_packet(&opkt);
-
+	opkt.stream_index=o_st->index;
+	
     if (pkt->pts != AV_NOPTS_VALUE) {
         opkt.pts = av_rescale_q(pkt->pts, i_st->time_base, o_st->time_base) - opts->ost_tb_start_time;
 	} else
@@ -202,7 +203,7 @@ void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, cons
      * Counting encoded video frames needs to be done separately because of
      * reordering, see do_video_out()
      */
-
+	fprintf(stderr,"DEBUG: write_frame: strmidx:%d pts:%lld dts: %lld iv:%d\n",pkt->stream_index,pkt->pts,pkt->dts,opts->interleave_write);
 
     while (bsfc) {
         AVPacket new_pkt = *pkt;
@@ -235,7 +236,7 @@ void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, cons
 	}
 	
     if (ret < 0) {
-        fprintf (stderr,"ERROR: av_interleaved_write_frame() got error: %d", ret);
+        fprintf (stderr,"ERROR: av_interleaved_write_frame() got error: %d\n", ret);
         //exit_program(1);
     }
 }

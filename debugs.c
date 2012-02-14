@@ -28,129 +28,107 @@
 #include "libavformat/avformat.h"
 
 void debugReturnCode(int r) {
+	if (verbosity<AV_LOG_INFO) return;
     switch (r) {
 #if USE_OLD_FFMPEG
         case AVERROR_UNKNOWN:
 #else
         case AVERROR(EINVAL):
 #endif
-            /**< unknown error */
-            fprintf(stderr, "Unknown error.\n");
+            fprintf(stderr, "DEBUG: Unknown error.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_IO:
 #else
         case AVERROR(EIO):
 #endif             
-            /**< I/O error */
-            fprintf(stderr, "I/O error.\n");
+            fprintf(stderr, "DEBUG:I/O error.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_NUMEXPECTED:
 #else
         case AVERROR(EDOM):
 #endif			    
-            /**< Number syntax expected in filename. */
-            fprintf(stderr, "Number syntax expected in filename.\n");
+            fprintf(stderr, "DEBUG:Number syntax expected in filename.\n");
             break;
         case AVERROR_INVALIDDATA:
-            /**< invalid data found */
-            fprintf(stderr, "Invalid data found.\n");
+            fprintf(stderr, "DEBUG:Invalid data found.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_NOMEM:
 #else
         case AVERROR(ENOMEM):
 #endif        
-            /**< not enough memory */
-            fprintf(stderr, "Not enough memory.\n");
+            fprintf(stderr, "DEBUG:Not enough memory.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_NOFMT:
 #else
         case AVERROR(EILSEQ):
 #endif         
-            /**< unknown format */
-            fprintf(stderr, "Unknown format.\n");
+            fprintf(stderr, "DEBUG:Unknown format.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_NOTSUPP:
 #else
         case AVERROR(ENOSYS):
 #endif       
-            /**< Operation not supported. */
-            fprintf(stderr, "Operation not supported.\n");
+            fprintf(stderr, "DEBUG:Operation not supported.\n");
             break;
 #if USE_OLD_FFMPEG
         case AVERROR_NOENT:
 #else
         case AVERROR(ENOENT):
 #endif        
-            /**< No such file or directory. */
-            fprintf(stderr, "No such file or directory.\n");
+            fprintf(stderr, "DEBUG:No such file or directory.\n");
             break;
         case AVERROR_EOF:
-            /**< End of file. */
-            fprintf(stderr, "End of file.\n");
+            fprintf(stderr, "DEBUG:End of file.\n");
             break;
         case AVERROR_PATCHWELCOME:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Not yet implemented in FFmpeg. Patches welcome.\n");
+            fprintf(stderr, "DEBUG:Not yet implemented in FFmpeg. Patches welcome.\n");
             break;
 #if USE_OLD_FFMPEG
             /**< Codes For Old FFMPEG Deprecated. */
 #else
-            /**< New Error Codes For FFMPEG. */
         case AVERROR_BUG:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG\n");
+            fprintf(stderr, "DEBUG:Internal bug. AVERROR_BUG\n");
             break;
         case AVERROR_BUG2:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG2.\n");
+            fprintf(stderr, "DEBUG:Internal bug. AVERROR_BUG2.\n");
             break;
         case AVERROR_STREAM_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Stream not found.\n");
+            fprintf(stderr, "DEBUG:Stream not found.\n");
             break;
         case AVERROR_PROTOCOL_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Protocol not found.\n");
+            fprintf(stderr, "DEBUG:Protocol not found.\n");
             break;
         case AVERROR_OPTION_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Option not found.\n");
+            fprintf(stderr, "DEBUG:Option not found.\n");
             break;
         case AVERROR_MUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Muxer not found. \n");
+            fprintf(stderr, "DEBUG:Muxer not found. \n");
             break;
         case AVERROR_FILTER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Filter not found.\n");
+            fprintf(stderr, "DEBUG:Filter not found.\n");
             break;
         case AVERROR_EXIT:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Immediate exit was requested; the called function should not be restarted.\n");
+            fprintf(stderr, "DEBUG:Immediate exit was requested; the called function should not be restarted.\n");
             break;
         case AVERROR_ENCODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Encoder not found.\n");
+            fprintf(stderr, "DEBUG:Encoder not found.\n");
             break;
         case AVERROR_DEMUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Demuxer not found.\n");
+            fprintf(stderr, "DEBUG:Demuxer not found.\n");
             break;
         case AVERROR_DECODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Decoder not found.\n");
+            fprintf(stderr, "DEBUG:Decoder not found.\n");
             break;
         case AVERROR_BSF_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Bitstream filter not found.\n");
+            fprintf(stderr, "DEBUG:Bitstream filter not found.\n");
             break;
 #endif	
         default:
-            fprintf(stderr, "Unknown return code: %d\n", r);
+            fprintf(stderr, "DEBUG:Unknown return code: %d\n", r);
     }
 }

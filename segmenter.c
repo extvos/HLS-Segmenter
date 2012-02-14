@@ -26,6 +26,8 @@
 #include <math.h>
 #include <sys/stat.h>
 
+#define segmenter_h_declare_segmenter_c
+
 #include "segmenter.h"
 #include <libavformat/avformat.h>
 
@@ -95,22 +97,18 @@ void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts) {
 }
 
 
-void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
-    FILE * outputFile;
-    char fullFileName[1024];
-    snprintf(fullFileName, 1024, "%s/%s.size", file_directory, filename_prefix);
-
-    outputFile = fopen(fullFileName, "w");
-    fprintf(outputFile, "%u", (unsigned int) size);
-    fclose(outputFile);
-}
 
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
     AVCodecContext *input_codec_context;
     AVCodecContext *output_codec_context;
     AVStream *output_stream;
 
-    output_stream = avformat_new_stream(output_format_context, 0);
+	if (input_stream->codec->codec==NULL){
+        fprintf(stderr, "INFO: Opening input sream codec for stream %d\n",input_stream->index);
+		AVCodec *codec=avcodec_find_decoder(input_stream->codec->codec_id);
+		avcodec_open2(input_stream->codec, codec, NULL);
+	}
+    output_stream = avformat_new_stream(output_format_context, input_stream->codec->codec);
     if (!output_stream) {
         fprintf(stderr, "Could not allocate stream\n");
         exit(1);
@@ -134,12 +132,9 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
     }
 
     switch (input_codec_context->codec_type) {
-#ifdef USE_OLD_FFMPEG
-        case CODEC_TYPE_AUDIO:
-#else
         case AVMEDIA_TYPE_AUDIO:
-#endif
-            output_codec_context->channel_layout = input_codec_context->channel_layout;
+
+			output_codec_context->channel_layout = input_codec_context->channel_layout;
             output_codec_context->sample_rate = input_codec_context->sample_rate;
             output_codec_context->channels = input_codec_context->channels;
             output_codec_context->frame_size = input_codec_context->frame_size;
@@ -149,12 +144,9 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
                 output_codec_context->block_align = input_codec_context->block_align;
             }
             break;
-#ifdef USE_OLD_FFMPEG
-        case CODEC_TYPE_VIDEO:
-#else
         case AVMEDIA_TYPE_VIDEO:
-#endif
-            output_codec_context->pix_fmt = input_codec_context->pix_fmt;
+
+			output_codec_context->pix_fmt = input_codec_context->pix_fmt;
             output_codec_context->width = input_codec_context->width;
             output_codec_context->height = input_codec_context->height;
             output_codec_context->has_b_frames = input_codec_context->has_b_frames;
@@ -230,11 +222,39 @@ int write_index_file(const char index[], const char tmp_index[], const unsigned 
     return rename(tmp_index, index);
 }
 
+AVFormatContext * newOutputFile (char *filename, char *format, AVStream* video_in, AVStream* audio_in, AVStream** video_out, AVStream** audio_out) {
+	int err;
+	AVFormatContext * oc=NULL;
+	*video_out=NULL;
+	*audio_out=NULL;
+	if (err=avformat_alloc_output_context2(&oc, NULL,format, filename)<0){
+		 fprintf(stderr, "ERROR: Could not initiate output context for %s using muxer %s\n",filename,format);
+		 debugReturnCode(err);
+		 exit(1);
+	};
+	if ((err=avio_open2(&oc->pb,filename,AVIO_FLAG_WRITE,NULL,NULL))<0){
+		 fprintf(stderr, "ERROR: Could not initiate output file for %s\n",filename);
+		 debugReturnCode(err);
+		 exit(1);
+	};
+	if (video_in) {
+		*video_out= add_output_stream(oc,video_in);
+		if (oc->oformat->flags & AVFMT_GLOBALHEADER)oc->flags |= CODEC_FLAG_GLOBAL_HEADER;
+	}
+	if (audio_in) {
+		*audio_out=add_output_stream(oc,audio_in);
+	}
+
+	av_dump_format(oc, 0, filename, 1);
+    return oc;
+}
+
+
 int main(int argc, const char *argv[]) {
     //input parameters
     char inputFilename[MAX_FILENAME_LENGTH], playlistFilename[MAX_FILENAME_LENGTH], baseDirName[MAX_FILENAME_LENGTH], baseFileName[MAX_FILENAME_LENGTH];
     char baseFileExtension[5]; //either "ts", "aac" or "mp3"
-    int segmentLength, outputStreams, verbosity, version,usage,doid3;
+    int segmentLength, outputStreams, version,usage,doid3;
 
 
 
@@ -242,24 +262,20 @@ int main(int argc, const char *argv[]) {
     char tempPlaylistName[MAX_FILENAME_LENGTH];
 
 
-    //these are used to determine the exact length of the current segment
-    double prev_segment_time = 0;
-    double segment_time;
     unsigned int actual_segment_durations[2048];
-    double packet_time = 0;
 
-    //new variables to keep track of output size
-    double output_bytes = 0;
 
     unsigned int output_index = 1;
     AVOutputFormat *ofmt;
     AVFormatContext *ic = NULL;
     AVFormatContext *oc;
-    AVStream *video_st = NULL;
-    AVStream *audio_st = NULL;
+    AVStream *out_video_st = NULL;
+    AVStream *out_audio_st = NULL;
+    AVStream *in_video_st = NULL;
+    AVStream *in_audio_st = NULL;
     AVCodec *codec;
-    int video_index;
-    int audio_index;
+    int video_index=-1;
+    int audio_index=-1;
     unsigned int first_segment = 1;
     unsigned int last_segment = 0;
     int write_index = 1;
@@ -271,6 +287,8 @@ int main(int argc, const char *argv[]) {
     unsigned char * image_id3_tag;
 
 	do_streamcopy_opts video_opts, audio_opts;
+	memset(&video_opts,0,sizeof(video_opts));
+	memset(&audio_opts,0,sizeof(audio_opts));
 	
     size_t id3_tag_size = 73;
     int newFile = 1; //a boolean value to flag when a new file needs id3 tag info in it
@@ -324,37 +342,19 @@ int main(int argc, const char *argv[]) {
         exit(1);
     }
 
-    oc = avformat_alloc_context();
-    if (!oc) {
-        fprintf(stderr, "ERROR: Could not allocate output context.");
-        exit(1);
-    }
-
-    video_index = -1;
-    audio_index = -1;
+    av_dump_format(ic, 0, inputFilename, 0);
 
     for (i = 0; i < ic->nb_streams && (video_index < 0 || audio_index < 0); i++) {
         switch (ic->streams[i]->codec->codec_type) {
-#ifdef USE_OLD_FFMPEG
-            case CODEC_TYPE_VIDEO:
-#else
             case AVMEDIA_TYPE_VIDEO:
-#endif
 				video_index = i;
 				ic->streams[i]->discard = AVDISCARD_NONE;
-				if (outputStreams & OUTPUT_STREAM_VIDEO) {
-					video_st = add_output_stream(oc, ic->streams[i]);
-				}
+				if (outputStreams & OUTPUT_STREAM_VIDEO) in_video_st=ic->streams[i];
                 break;
-#ifdef USE_OLD_FFMPEG
-            case CODEC_TYPE_AUDIO:
-#else
             case AVMEDIA_TYPE_AUDIO:
-#endif
                 audio_index = i;
                 ic->streams[i]->discard = AVDISCARD_NONE;
-                if (outputStreams & OUTPUT_STREAM_AUDIO)
-                    audio_st = add_output_stream(oc, ic->streams[i]);
+                if (outputStreams & OUTPUT_STREAM_AUDIO) in_audio_st=ic->streams[i];
                 break;
             default:
                 ic->streams[i]->discard = AVDISCARD_ALL;
@@ -362,95 +362,44 @@ int main(int argc, const char *argv[]) {
         }
     }
 
-    if (video_index == -1) {
-        fprintf(stderr, "Source stream must have video component.\n");
-        exit(1);
-    }
-
     //now that we know the audio and video output streams
     //we can decide on an output format.
+    char *output_format;
     if (outputStreams == OUTPUT_STREAM_AUDIO) {
         //the audio output format should be the same as the audio input format
-        switch (ic->streams[audio_index]->codec->codec_id) {
+        switch (in_audio_st->codec->codec_id) {
             case CODEC_ID_MP3:
                 fprintf(stderr, "Setting output audio to mp3.");
                 strncpy(baseFileExtension, ".mp3", strlen(".mp3"));
-                ofmt = av_guess_format("mp3", NULL, NULL);
+				output_format="mp3";
                 break;
             case CODEC_ID_AAC:
                 fprintf(stderr, "Setting output audio to aac.");
-                ofmt = av_guess_format("adts", NULL, NULL);
+                output_format="adts";
                 break;
             default:
-                fprintf(stderr, "Codec id %d not supported.\n", ic->streams[audio_index]->id);
-        }
-        if (!ofmt) {
-            fprintf(stderr, "Could not find audio muxer.\n");
-            exit(1);
+                fprintf(stderr, "Codec id %d not supported.\n", in_audio_st->codec->codec_id);
+				exit(1);
         }
     } else {
-        ofmt = av_guess_format("mpegts", NULL, NULL);
-        if (!ofmt) {
-            fprintf(stderr, "Could not find MPEG-TS muxer.\n");
-            exit(1);
-        }
+        output_format="mpegts";
     }
-    oc->oformat = ofmt;
-
-    if (outputStreams & OUTPUT_STREAM_VIDEO && oc->oformat->flags & AVFMT_GLOBALHEADER) {
-        oc->flags |= CODEC_FLAG_GLOBAL_HEADER;
-    }
-
-    /*  pass the options to avformat_write_header directly. 
-        if (av_set_parameters(oc, NULL) < 0) {
-            fprintf(stderr, "Invalid output format parameters.\n");
-            exit(1);
-        }
-     */
-
-    av_dump_format(ic, 0, inputFilename, 0);
-    av_dump_format(oc, 0, baseFileName, 1);
-
-
-    //open the video codec only if there is video data
-    if (video_index != -1) {
-		ret =0;
-        if (outputStreams & OUTPUT_STREAM_VIDEO)
-            codec = avcodec_find_decoder(video_st->codec->codec_id);
-			if (codec && strcmp("h264",codec->name)==0) {
-				fprintf(stderr, "DEBUG: Output codec is h264 trying to use  h264_mp4toannexb bitstream filter\n");
-				bsf_h264_mp4toannexb=av_bitstream_filter_init ("h264_mp4toannexb");
-				if (!bsf_h264_mp4toannexb) {
-					fprintf(stderr, "WARN: Could not open h264_mp4toannexb bitstream filter!\n");
-				} else fprintf(stderr, "DEBUG: h264_mp4toannexb bitstream filter opened :) !\n");
-			}
-        else
-            codec = avcodec_find_decoder(ic->streams[video_index]->codec->codec_id);
-        if (!codec) {
-            fprintf(stderr, "Could not find video decoder, key frames will not be honored.\n");
-        }
-
-        if (outputStreams & OUTPUT_STREAM_VIDEO)
-            ret = avcodec_open2(video_st->codec, codec, NULL);
-        else
-            avcodec_open2(ic->streams[video_index]->codec, codec, NULL);
-        if (ret < 0) {
-            fprintf(stderr, "Could not open video decoder, key frames will not be honored.\n");
-        }
-    }
-
-
+    
+    
     snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 
-    if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
-        fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
-        exit(1);
-    }
+	
+	oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
     newFile = 1;
-
+	
+	video_opts.skiptokeyframe=1;
+	audio_opts.skiptokeyframe=1;
+	video_opts.interleave_write=(outputStreams==(OUTPUT_STREAM_VIDEO|OUTPUT_STREAM_AUDIO));
+	audio_opts.interleave_write=video_opts.interleave_write;
+	
     int r = avformat_write_header(oc, NULL);
     if (r) {
-        fprintf(stderr, "Could not write mpegts header to first output file.\n");
+        fprintf(stderr, "ERROR: Could not write header to first output file.\n");
         debugReturnCode(r);
         exit(1);
     }
@@ -458,6 +407,18 @@ int main(int argc, const char *argv[]) {
     //no segment info is written here. This just creates the shell of the playlist file
     write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
 
+	double input_time_constant_v =  (video_index==-1?0:(double)ic->streams[video_index]->time_base.num / ic->streams[video_index]->time_base.den);
+	double input_time_constant_a =  (audio_index==-1?0:(double)ic->streams[audio_index]->time_base.num / ic->streams[audio_index]->time_base.den);
+	int is_video,is_audio;
+	double segment_start=-1;
+	double input_time=0;
+    double current_segment_length=0;
+    double current_segment_length_up_to_this_packet=0;
+	int64_t in_video_pts_base=AV_NOPTS_VALUE;
+	int64_t in_audio_pts_base=AV_NOPTS_VALUE;
+	
+	//we break the input over keyframes from which stream:
+	int sync_stream_index=(outputStreams & OUTPUT_STREAM_VIDEO?video_index:audio_index);
     do {
         AVPacket packet;
 
@@ -466,68 +427,51 @@ int main(int argc, const char *argv[]) {
         if (decode_done < 0) {
             break;
         }
-
-        if (av_dup_packet(&packet) < 0) {
-            fprintf(stderr, "Could not duplicate packet.");
-            av_free_packet(&packet);
-            break;
-        }
-
-        //this time is used to check for a break in the segments
-        //	if (packet.stream_index == video_index && (packet.flags & PKT_FLAG_KEY)) 
-        //	{
-        //    segment_time = (double)video_st->pts.val * video_st->time_base.num / video_st->time_base.den;			
-        //	}
-#if USE_OLD_FFMPEG
-        if (packet.stream_index == video_index && (packet.flags & PKT_FLAG_KEY))
-#else
-        if (packet.stream_index == video_index && (packet.flags & AV_PKT_FLAG_KEY))
-#endif		
+		is_video=(packet.stream_index == video_index );
+		is_audio=(packet.stream_index == audio_index ); 
+		if (!(is_video || is_audio)) continue;
+		if (is_video && ((outputStreams & OUTPUT_STREAM_VIDEO)==0)) continue;
+		if (is_audio && ((outputStreams & OUTPUT_STREAM_AUDIO)==0)) continue;
+		
+        if ( packet.pts!=AV_NOPTS_VALUE)
         {
-            segment_time = (double) packet.pts * ic->streams[video_index]->time_base.num / ic->streams[video_index]->time_base.den;
-        }
-        //  else if (video_index < 0) 
-        //	{
-        //		segment_time = (double)audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
-        //	}
+            if (is_video) {
+				if (in_video_pts_base==AV_NOPTS_VALUE) in_video_pts_base=packet.pts;
+				input_time = (double) (packet.pts - in_video_pts_base)  * input_time_constant_v; //we do video output (we have video frame at this point) we calculate time based on it
+			} else {
+				if (in_audio_pts_base==AV_NOPTS_VALUE) in_audio_pts_base=packet.pts;
+				if ((outputStreams & OUTPUT_STREAM_VIDEO)==0) input_time = (double) (packet.pts - in_audio_pts_base) * input_time_constant_a; //we do audio output and we don't do video so base time on audio
+			}
+			if (segment_start==-1) segment_start=input_time;
+			current_segment_length_up_to_this_packet=current_segment_length;
+			current_segment_length=input_time-segment_start;
+		}
 
-        //get the most recent packet time
-        //this time is used when the time for the final segment is printed. It may not be on the edge of
-        //of a keyframe!
-        if (packet.stream_index == video_index)
-            packet_time = (double) packet.pts * ic->streams[video_index]->time_base.num / ic->streams[video_index]->time_base.den; //(double)video_st->pts.val * video_st->time_base.num / video_st->time_base.den;
-        else if (outputStreams & OUTPUT_STREAM_AUDIO)
-            packet_time = (double) audio_st->pts.val * audio_st->time_base.num / audio_st->time_base.den;
-        else
-            continue;
+		fprintf(stderr, "DEBUG: reading: v:%d a:%d kf:%d pts:%lld (%lld)  it:%lf\n", is_video, is_audio, (packet.flags & AV_PKT_FLAG_KEY)!=0, packet.pts,packet.pts-(is_audio?in_audio_pts_base:in_video_pts_base), input_time);
+		
         //start looking for segment splits for videos one half second before segment duration expires. This is because the 
         //segments are split on key frames so we cannot expect all segments to be split exactly equally. 
-        if (segment_time - prev_segment_time >= segmentLength - 0.5) {
-            fprintf(stderr, "looking to print index file at time %lf\n", segment_time);
+        if ( packet.stream_index==sync_stream_index && current_segment_length_up_to_this_packet  >= segmentLength - 0.5 && (packet.flags & AV_PKT_FLAG_KEY)) {
+            actual_segment_durations[++last_segment] = current_segment_length_up_to_this_packet;
+			fprintf(stderr, "INFO: Segment %d has duration time %lf\n", last_segment, current_segment_length_up_to_this_packet);
+			av_write_trailer(oc);
             avio_flush(oc->pb);
             avio_close(oc->pb);
-
+			avformat_free_context(oc);
+			
             if (write_index) {
-                actual_segment_durations[++last_segment] = (unsigned int) rint(segment_time - prev_segment_time);
                 write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
-                fprintf(stderr, "Writing index file at time %lf\n", packet_time);
             }
-
-            struct stat st;
-            stat(currentOutputFileName, &st);
-            output_bytes += st.st_size;
 
             snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
-            if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
-                fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
-                break;
-            }
-
+			
+			oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
             newFile = 1;
-            prev_segment_time = segment_time;
+			video_opts.skiptokeyframe=1;
+			audio_opts.skiptokeyframe=1;
         }
 
-        if (outputStreams == OUTPUT_STREAM_AUDIO && packet.stream_index == audio_index) {
+        if (is_audio) {
             if (newFile && outputStreams == OUTPUT_STREAM_AUDIO) {
                 //add id3 tag info
                 //fprintf(stderr, "adding id3tag to file %s\n", currentOutputFileName);
@@ -541,50 +485,16 @@ int main(int argc, const char *argv[]) {
                 newFile = 0;
             }
 
-            packet.stream_index = 0; //only one stream in audio only segments
-            ret = av_interleaved_write_frame(oc, &packet);
-        } else if (outputStreams & OUTPUT_STREAM_VIDEO) {
+            do_streamcopy (in_audio_st,out_audio_st,oc,&packet,&audio_opts);
+        } else if (is_video) {
             if (newFile) {
                 //fprintf(stderr, "New File: %lld %lld %lld\n", packet.pts, video_st->pts.val, audio_st->pts.val);
                 //printf("%lf %lld %lld %lld %lld %lld %lf\n", segment_time, audio_st->pts.val, audio_st->cur_dts, audio_st->cur_pkt.pts, packet.pts, packet.dts, packet.dts * av_q2d(ic->streams[audio_index]->time_base) );
                 newFile = 0;
             }
             
-			if (bsf_h264_mp4toannexb) { //try bitstream filter apply:
-				//code adapted from  write_frame @ avconv.c from libav sources:
-				AVPacket new_pkt;
-				av_init_packet(&new_pkt);
-				new_pkt.pts=packet.pts;
-				new_pkt.dts=packet.dts;
-				new_pkt.destruct = av_destruct_packet;
-				new_pkt.stream_index=video_st->index;
-				new_pkt.flags = packet.flags;
-				new_pkt.duration=packet.duration;
-				new_pkt.data=packet.data;
-				new_pkt.size=packet.size;
-				int a = av_bitstream_filter_filter(bsf_h264_mp4toannexb, video_st->codec, NULL,
-													&new_pkt.data, &new_pkt.size,
-													packet.data, packet.size,
-													packet.flags & AV_PKT_FLAG_KEY);
-				if (a > 0) {
-					av_free_packet(&packet);
-					packet = new_pkt;
-				} else if (a < 0) {
-					av_free_packet(&new_pkt);
-// 					fprintf(stderr, "ERROR: Bitstream filter %s failed for stream %d, codec %s\n",
-// 						bsf_h264_mp4toannexb->filter->name, packet.stream_index,
-// 						video_st->codec->codec ? video_st->codec->codec->name : "copy"
-// 					);
-// 
-// 					exit(1);
-				}
-			}
             
-            
-            if (outputStreams == OUTPUT_STREAM_VIDEO)
-                ret = av_write_frame(oc, &packet);
-            else
-                ret = av_interleaved_write_frame(oc, &packet);
+            do_streamcopy (in_video_st,out_video_st,oc,&packet,&video_opts);
         }
 
         if (ret < 0) {
@@ -599,31 +509,14 @@ int main(int argc, const char *argv[]) {
     } while (!decode_done);
 
     //make sure all packets are written and then close the last file. 
-    avio_flush(oc->pb);
     av_write_trailer(oc);
-
-    if (video_st && (video_st->codec->codec !=NULL))
-        avcodec_close(video_st->codec);
-
-    if (audio_st && (audio_st->codec->codec != NULL)){
-        avcodec_close(audio_st->codec);
-    }
-
-    for (i = 0; i < oc->nb_streams; i++) {
-        av_freep(&oc->streams[i]->codec);
-        av_freep(&oc->streams[i]);
-    }
-
-    avio_close(oc->pb);
-    av_free(oc);
-
-    struct stat st;
-    stat(currentOutputFileName, &st);
-    output_bytes += st.st_size;
+    avio_flush(oc->pb);
+	avio_close(oc->pb);
+	avformat_free_context(oc);
 
 
     if (write_index) {
-        actual_segment_durations[++last_segment] = (unsigned int) rint(packet_time - prev_segment_time);
+        actual_segment_durations[++last_segment] = (unsigned int) rint(current_segment_length);
 
         //make sure that the last segment length is not zero
         if (actual_segment_durations[last_segment] == 0)
@@ -633,7 +526,6 @@ int main(int argc, const char *argv[]) {
 
     }
 
-    write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
 
     return 0;
 }
