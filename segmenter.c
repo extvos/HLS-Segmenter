@@ -24,12 +24,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 #define segmenter_h_declare_segmenter_c
 
 #include "segmenter.h"
 #include <libavformat/avformat.h>
+#include <libavutil/opt.h>
+
 
 #define IMAGE_ID3_SIZE 9171
 
@@ -161,11 +164,13 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
     return output_stream;
 }
 
-int write_index_file(const char index[], const char tmp_index[], const unsigned int planned_segment_duration, const unsigned int actual_segment_duration[],
-        const char output_directory[], const char output_prefix[], const char output_file_extension[],
-        const unsigned int first_segment, const unsigned int last_segment) {
+int write_index_file(const char *index,  const unsigned int *actual_segment_duration, const char *output_prefix, const char *output_file_extension,  int last_segment) {
+	if (last_segment==0) return 0;
+	char tmp_index [MAX_FILENAME_LENGTH+5];
+	snprintf(tmp_index,MAX_FILENAME_LENGTH+4,"%s.tmp",index);
     FILE *index_fp;
-    char *write_buf;
+    char write_buf [MAX_FILENAME_LENGTH*2+1];
+	int bytes_in_buf;
     unsigned int i;
 
     index_fp = fopen(tmp_index, "w");
@@ -174,55 +179,47 @@ int write_index_file(const char index[], const char tmp_index[], const unsigned 
         return -1;
     }
 
-    write_buf = malloc(sizeof (char) * 1024);
-    if (!write_buf) {
-        fprintf(stderr, "Could not allocate write buffer for index file, index file will be invalid\n");
-        fclose(index_fp);
-        return -1;
-    }
 
-    unsigned int maxDuration = planned_segment_duration;
+    unsigned int maxDuration = actual_segment_duration[0];
 
-    for (i = first_segment; i <= last_segment; i++)
-        if (actual_segment_duration[i] > maxDuration)
-            maxDuration = actual_segment_duration[i];
+    for (i = 1; i <= last_segment; i++) if (actual_segment_duration[i] > maxDuration) maxDuration = actual_segment_duration[i];
 
 
 
-    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n", maxDuration);
+	bytes_in_buf=snprintf(write_buf, MAX_FILENAME_LENGTH*2, "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n", maxDuration);
 
-    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
-        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
-        free(write_buf);
-        fclose(index_fp);
-        return -1;
-    }
+	if (fwrite(write_buf, bytes_in_buf, 1, index_fp) != 1) {
+		fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
+		fclose(index_fp);
+		unlink (tmp_index);
+		return -1;
+	}
 
-    for (i = first_segment; i <= last_segment; i++) {
-        snprintf(write_buf, 1024, "#EXTINF:%u,\n%s-%u%s\n", actual_segment_duration[i], output_prefix, i, output_file_extension);
-        if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
-            fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
-            free(write_buf);
-            fclose(index_fp);
+	for (i = 0; i <= last_segment; i++) {
+		bytes_in_buf=snprintf(write_buf, MAX_FILENAME_LENGTH*2, "#EXTINF:%u,\n%s-%u%s\n", actual_segment_duration[i], output_prefix, i, output_file_extension);
+		if (fwrite(write_buf, bytes_in_buf, 1, index_fp) != 1) {
+			fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
+			fclose(index_fp);
+			unlink (tmp_index);
             return -1;
         }
     }
 
-    snprintf(write_buf, 1024, "#EXT-X-ENDLIST\n");
-    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
+    bytes_in_buf=snprintf(write_buf, MAX_FILENAME_LENGTH*2, "#EXT-X-ENDLIST\n");
+    if (fwrite(write_buf, bytes_in_buf, 1, index_fp) != 1) {
         fprintf(stderr, "Could not write last file and endlist tag to m3u8 index file\n");
-        free(write_buf);
         fclose(index_fp);
+		unlink (tmp_index);
         return -1;
     }
 
-    free(write_buf);
     fclose(index_fp);
 
     return rename(tmp_index, index);
 }
 
 AVFormatContext * newOutputFile (char *filename, char *format, AVStream* video_in, AVStream* audio_in, AVStream** video_out, AVStream** audio_out) {
+	fprintf(stderr, "INFO: new output file %s using muxer %s\n",filename,format);
 	int err;
 	AVFormatContext * oc=NULL;
 	*video_out=NULL;
@@ -309,19 +306,8 @@ int main(int argc, const char *argv[]) {
 		build_id3_tag((char *) id3_tag, id3_tag_size);
 	}
 
-    snprintf(tempPlaylistName, strlen(playlistFilename) + strlen(baseDirName) + 1, "%s%s", baseDirName, playlistFilename);
-    strncpy(playlistFilename, tempPlaylistName, strlen(tempPlaylistName));
-    strncpy(tempPlaylistName, playlistFilename, MAX_FILENAME_LENGTH);
-    strncat(tempPlaylistName, ".", 1);
+    snprintf(playlistFilename, MAX_FILENAME_LENGTH, "%s/%s", baseDirName, playlistFilename);
 
-    //decide if this is an aac file or a mpegts file.
-    //postpone deciding format until later
-    /*	ifmt = av_find_input_format("mpegts");
-    if (!ifmt) 
-    {
-    fprintf(stderr, "Could not find MPEG-TS demuxer.\n");
-    exit(1);
-    } */
 
 	
 
@@ -370,11 +356,12 @@ int main(int argc, const char *argv[]) {
         switch (in_audio_st->codec->codec_id) {
             case CODEC_ID_MP3:
                 fprintf(stderr, "Setting output audio to mp3.");
-                strncpy(baseFileExtension, ".mp3", strlen(".mp3"));
+                strcpy(baseFileExtension, ".mp3");
 				output_format="mp3";
                 break;
             case CODEC_ID_AAC:
                 fprintf(stderr, "Setting output audio to aac.");
+                strcpy(baseFileExtension, ".aac");
                 output_format="adts";
                 break;
             default:
@@ -386,7 +373,7 @@ int main(int argc, const char *argv[]) {
     }
     
     
-    snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+    snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 
 	
 	oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
@@ -404,8 +391,6 @@ int main(int argc, const char *argv[]) {
         exit(1);
     }
 
-    //no segment info is written here. This just creates the shell of the playlist file
-    write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
 
 	double input_time_constant_v =  (video_index==-1?0:(double)ic->streams[video_index]->time_base.num / ic->streams[video_index]->time_base.den);
 	double input_time_constant_a =  (audio_index==-1?0:(double)ic->streams[audio_index]->time_base.num / ic->streams[audio_index]->time_base.den);
@@ -459,11 +444,8 @@ int main(int argc, const char *argv[]) {
             avio_close(oc->pb);
 			avformat_free_context(oc);
 			
-            if (write_index) {
-                write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
-            }
 
-            snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+            snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 			
 			oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
             newFile = 1;
@@ -515,16 +497,11 @@ int main(int argc, const char *argv[]) {
 	avformat_free_context(oc);
 
 
-    if (write_index) {
-        actual_segment_durations[++last_segment] = (unsigned int) rint(current_segment_length);
+	actual_segment_durations[++last_segment] = (unsigned int) rint(current_segment_length);
 
-        //make sure that the last segment length is not zero
-        if (actual_segment_durations[last_segment] == 0)
-            actual_segment_durations[last_segment] = 1;
+	if (actual_segment_durations[last_segment] == 0)     actual_segment_durations[last_segment] = 1;
 
-        write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
-
-    }
+	write_index_file(playlistFilename, actual_segment_durations,  baseFileName, baseFileExtension, last_segment);
 
 
     return 0;

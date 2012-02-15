@@ -58,6 +58,7 @@ void printUsage_short(int shortonly){
 	fprintf(stderr, "Usage: segmenter -i infile [-d baseDir] [-f baseFileName] [-o playListFile.m3u8] [-l 10] [-a|-v] [-t] \n");
 	if (shortonly) fprintf(stderr, "  segmenter -h for full help\n");
 }
+#define DEFAULT_SEGMENT_LENGTH "5"
 
 void printUsage() {
 	printUsage_short(0);
@@ -66,7 +67,7 @@ void printUsage() {
 	fprintf(stderr, "-o <outfile>\t\tPlaylist file to create. Default is <infile>.m3u8 \n");
 	fprintf(stderr, "-d <basedir>\t\tThe base directory for files. Default is  '.'\n");
 	fprintf(stderr, "-f <baseFileName>\tSegment files will be named <baseFileName>-#. Default is <infile>\n");
-	fprintf(stderr, "-l <segment length>\tThe length of each segment. Default is 5\n");
+	fprintf(stderr, "-l <segment length>\tThe length of each segment. Default is " DEFAULT_SEGMENT_LENGTH  "\n");
 	fprintf(stderr, "-t\t\t\tEnable id3 tagging code (EXPERIMENTAL)\n");
 	fprintf(stderr, "-a\t\t\taudio only decode for < 64k streams.\n");
 	fprintf(stderr, "-v\t\t\tvideo only decode for < 64k streams.\n\n");
@@ -258,7 +259,7 @@ int parseCommandLine(
 	*usage = 0;
 	*doid3tag = 0;
     *outputStreams = OUTPUT_STREAM_AV;
-    strncpy(baseExtension, ".ts", strlen(".ts"));
+    strcpy(baseExtension, ".ts");
 	
 	
 
@@ -337,21 +338,28 @@ int parseCommandLine(
                     fprintf(stderr, "ERROR: Missing required option --i for input file.\n");
                     missing = 1;
                 }
+                if (requiredOptions[OUTPUT_BASE_NAME_INDEX] == 0) {
+					if (requiredOptions[INPUT_FILE_INDEX] != 0) {
+						strncpy(baseName, inputFile,MAX_FILENAME_LENGTH);
+						char *slpos=strrchr(baseName,'/');
+						char *dp=strrchr(baseName,'.');
+						if (dp && (slpos==NULL || dp>slpos)) *dp=0;
+						requiredOptions[OUTPUT_BASE_NAME_INDEX]=1;
+					}
+                }
                 if (requiredOptions[OUTPUT_FILE_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --o for output playlist file.\n");
-                    missing = 1;
+					if (requiredOptions[OUTPUT_BASE_NAME_INDEX] != 0) {
+						 snprintf(outputFile, MAX_FILENAME_LENGTH, "%s.m3u8",baseName);
+						 requiredOptions[OUTPUT_FILE_INDEX]=1;
+					}
                 }
                 if (requiredOptions[OUTPUT_DIR_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --d for output base directory.\n");
-                    missing = 1;
-                }
-                if (requiredOptions[OUTPUT_BASE_NAME_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --f for file base name.\n");
-                    missing = 1;
+					strcpy(baseDir, ".");requiredOptions[OUTPUT_DIR_INDEX]='.';
                 }
                 if (requiredOptions[OUTPUT_SEGMENT_LENGTH_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --l for segment length.\n");
-                    missing = 1;
+					*segmentLength = strtol(DEFAULT_SEGMENT_LENGTH , NULL, 10);
+                    missing = 0;
+					requiredOptions[OUTPUT_SEGMENT_LENGTH_INDEX]=1;
                 }
 
                 if (missing == 1) {
