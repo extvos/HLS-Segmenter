@@ -102,7 +102,7 @@ void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts) {
 
 
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
-    AVCodecContext *input_codec_context;
+    AVCodecContext *input_codec_context=input_stream->codec;
     AVCodecContext *output_codec_context;
     AVStream *output_stream;
 
@@ -110,6 +110,11 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
         fprintf(stderr, "INFO: Opening input sream codec for stream %d\n",input_stream->index);
 		AVCodec *codec=avcodec_find_decoder(input_stream->codec->codec_id);
 		avcodec_open2(input_stream->codec, codec, NULL);
+		int listfilter;
+		if (input_codec_context->codec_type==AVMEDIA_TYPE_AUDIO) listfilter=AV_OPT_FLAG_AUDIO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
+		else listfilter=AV_OPT_FLAG_VIDEO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
+		opt_list(input_stream->codec,listfilter);
+		
 	}
     output_stream = avformat_new_stream(output_format_context, input_stream->codec->codec);
     if (!output_stream) {
@@ -117,8 +122,8 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
         exit(1);
     }
 
-    input_codec_context = input_stream->codec;
     output_codec_context = output_stream->codec;
+	av_opt_set_defaults(output_codec_context);
 
     output_codec_context->codec_id = input_codec_context->codec_id;
     output_codec_context->codec_type = input_codec_context->codec_type;
@@ -432,7 +437,7 @@ int main(int argc, const char *argv[]) {
 			current_segment_length=input_time-segment_start;
 		}
 
-		fprintf(stderr, "DEBUG: reading: v:%d a:%d kf:%d pts:%lld (%lld)  it:%lf\n", is_video, is_audio, (packet.flags & AV_PKT_FLAG_KEY)!=0, packet.pts,packet.pts-(is_audio?in_audio_pts_base:in_video_pts_base), input_time);
+		//fprintf(stderr, "DEBUG: reading: v:%d a:%d kf:%d pts:%lld (%lld)  it:%lf\n", is_video, is_audio, (packet.flags & AV_PKT_FLAG_KEY)!=0, packet.pts,packet.pts-(is_audio?in_audio_pts_base:in_video_pts_base), input_time);
 		
         //start looking for segment splits for videos one half second before segment duration expires. This is because the 
         //segments are split on key frames so we cannot expect all segments to be split exactly equally. 

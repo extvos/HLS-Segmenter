@@ -52,6 +52,7 @@ int parseCommandLine(char * inputFile, char * outputFile, char * baseDir, char *
 
 //debugs.c:
 void debugReturnCode(int r);
+void opt_list(void *obj, int filter_for_flags);
 
 //avconv_adapted_code.c
 

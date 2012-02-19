@@ -203,7 +203,7 @@ void do_streamcopy(AVStream *i_st, AVStream *o_st, AVFormatContext *o_fctx, cons
      * Counting encoded video frames needs to be done separately because of
      * reordering, see do_video_out()
      */
-	fprintf(stderr,"DEBUG: write_frame: strmidx:%d pts:%lld dts: %lld iv:%d\n",pkt->stream_index,pkt->pts,pkt->dts,opts->interleave_write);
+	//fprintf(stderr,"DEBUG: write_frame: strmidx:%d pts:%lld dts: %lld iv:%d\n",pkt->stream_index,pkt->pts,pkt->dts,opts->interleave_write);
 
     while (bsfc) {
         AVPacket new_pkt = *pkt;

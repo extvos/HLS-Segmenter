@@ -25,7 +25,8 @@
 
 
 #include "segmenter.h"
-#include "libavformat/avformat.h"
+#include <libavformat/avformat.h>
+#include <libavutil/opt.h>
 
 void debugReturnCode(int r) {
 	if (verbosity<AV_LOG_INFO) return;
@@ -131,4 +132,71 @@ void debugReturnCode(int r) {
         default:
             fprintf(stderr, "DEBUG:Unknown return code: %d\n", r);
     }
+}
+
+
+void opt_list(void *obj, int filter_for_flags)
+{
+	const AVOption *opt=NULL;
+	fprintf (stderr, "INFO: === Dumping non constant options for instance of class: %s",(*((AVClass**) obj))->class_name);
+	fprintf (stderr, " filter: ");
+	if (filter_for_flags==0) fprintf (stderr, "none");
+	else {
+		fprintf (stderr, "%c", (filter_for_flags & AV_OPT_FLAG_ENCODING_PARAM) ? 'E' : '.');
+		fprintf (stderr, "%c", (filter_for_flags & AV_OPT_FLAG_DECODING_PARAM) ? 'D' : '.');
+		fprintf (stderr, "%c", (filter_for_flags & AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
+		fprintf (stderr, "%c", (filter_for_flags & AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
+		fprintf (stderr, "%c", (filter_for_flags & AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
+	}
+	fprintf (stderr,"  === \n");
+ 
+	while ((opt = av_opt_next(obj, opt))) {
+		if (opt->type==AV_OPT_TYPE_CONST) continue;
+		if (filter_for_flags!=0 && opt->flags !=0  && ((opt->flags & filter_for_flags)!=filter_for_flags)) continue;
+		fprintf (stderr, "INFO: opt:%s unit:%s", opt->name,opt->unit);
+ 
+		switch (opt->type) {
+			case AV_OPT_TYPE_CONST:
+				fprintf (stderr, " type:<const>");
+				break;
+			case AV_OPT_TYPE_FLAGS:
+				fprintf (stderr, " type:<flags>");
+				break;
+			case AV_OPT_TYPE_INT:
+				fprintf (stderr, " type:<int>");
+				break;
+			case AV_OPT_TYPE_INT64:
+				fprintf (stderr, " type:<int64>");
+				break;
+			case AV_OPT_TYPE_DOUBLE:
+				fprintf (stderr, " type:<double>");
+				break;
+			case AV_OPT_TYPE_FLOAT:
+				fprintf (stderr, " type:<float>");
+				break;
+			case AV_OPT_TYPE_STRING:
+				fprintf (stderr, " type:<string>");
+				break;
+			case AV_OPT_TYPE_RATIONAL:
+				fprintf (stderr, " type:<rational>");
+				break;
+			case AV_OPT_TYPE_BINARY:
+				fprintf (stderr, " type:<binary>");
+				break;
+			default:
+				fprintf (stderr, " type:<UNKNOWN>");
+				break;
+		}
+		fprintf (stderr, " flags:");
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_ENCODING_PARAM) ? 'E' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_DECODING_PARAM) ? 'D' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
+
+		if (opt->help) fprintf (stderr, " help: %s", opt->help);
+		fprintf (stderr, "\n");
+	}
+	fprintf (stderr, "INFO: =============================== \n");
+	
 }
