@@ -155,30 +155,58 @@ void opt_list(void *obj, int filter_for_flags)
 		if (filter_for_flags!=0 && opt->flags !=0  && ((opt->flags & filter_for_flags)!=filter_for_flags)) continue;
 		fprintf (stderr, "INFO: opt:%s unit:%s", opt->name,opt->unit);
  
+		fprintf (stderr, " flags:");
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_ENCODING_PARAM) ? 'E' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_DECODING_PARAM) ? 'D' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
+		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
+
+		int64_t res_int64;
+		double res_double;
+		AVRational res_rational;
 		switch (opt->type) {
 			case AV_OPT_TYPE_CONST:
 				fprintf (stderr, " type:<const>");
 				break;
 			case AV_OPT_TYPE_FLAGS:
 				fprintf (stderr, " type:<flags>");
+				if (av_opt_get_int(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_int64)==0){
+					fprintf (stderr, " vlue: 0x%llx",res_int64);
+				}
 				break;
 			case AV_OPT_TYPE_INT:
 				fprintf (stderr, " type:<int>");
+				if (av_opt_get_int(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_int64)==0){
+					fprintf (stderr, " vlue: %lld",res_int64);
+				}
 				break;
 			case AV_OPT_TYPE_INT64:
 				fprintf (stderr, " type:<int64>");
+				if (av_opt_get_int(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_int64)==0){
+					fprintf (stderr, " vlue: %lld",res_int64);
+				}
 				break;
 			case AV_OPT_TYPE_DOUBLE:
 				fprintf (stderr, " type:<double>");
+				if (av_opt_get_double(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_double)==0){
+					fprintf (stderr, " vlue: %f",res_double);
+				}
 				break;
 			case AV_OPT_TYPE_FLOAT:
 				fprintf (stderr, " type:<float>");
+				if (av_opt_get_double(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_double)==0){
+					fprintf (stderr, " vlue: %f",res_double);
+				}
 				break;
 			case AV_OPT_TYPE_STRING:
 				fprintf (stderr, " type:<string>");
 				break;
 			case AV_OPT_TYPE_RATIONAL:
 				fprintf (stderr, " type:<rational>");
+				if (av_opt_get_q(obj,opt->name,AV_OPT_SEARCH_CHILDREN,&res_rational)==0){
+					fprintf (stderr, " vlue: %d / %d ",res_rational.num,res_rational.den);
+				}
 				break;
 			case AV_OPT_TYPE_BINARY:
 				fprintf (stderr, " type:<binary>");
@@ -187,13 +215,7 @@ void opt_list(void *obj, int filter_for_flags)
 				fprintf (stderr, " type:<UNKNOWN>");
 				break;
 		}
-		fprintf (stderr, " flags:");
-		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_ENCODING_PARAM) ? 'E' : '.');
-		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_DECODING_PARAM) ? 'D' : '.');
-		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
-		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
-		fprintf (stderr, "%c", (opt->flags & AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
-
+		
 		if (opt->help) fprintf (stderr, " help: %s", opt->help);
 		fprintf (stderr, "\n");
 	}

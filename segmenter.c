@@ -110,10 +110,10 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
         fprintf(stderr, "INFO: Opening input sream codec for stream %d\n",input_stream->index);
 		AVCodec *codec=avcodec_find_decoder(input_stream->codec->codec_id);
 		avcodec_open2(input_stream->codec, codec, NULL);
-		int listfilter;
-		if (input_codec_context->codec_type==AVMEDIA_TYPE_AUDIO) listfilter=AV_OPT_FLAG_AUDIO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
-		else listfilter=AV_OPT_FLAG_VIDEO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
-		opt_list(input_stream->codec,listfilter);
+		//int listfilter;
+		//if (input_codec_context->codec_type==AVMEDIA_TYPE_AUDIO) listfilter=AV_OPT_FLAG_AUDIO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
+		//else listfilter=AV_OPT_FLAG_VIDEO_PARAM|AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM;
+		//opt_list(input_stream->codec,listfilter);
 		
 	}
     output_stream = avformat_new_stream(output_format_context, input_stream->codec->codec);
@@ -121,8 +121,15 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
         fprintf(stderr, "Could not allocate stream\n");
         exit(1);
     }
-
+	output_stream->r_frame_rate=input_stream->r_frame_rate;
+	output_stream->pts=input_stream->pts;
+	output_stream->time_base=input_stream->time_base;
+	output_stream->duration=0;
+    fprintf(stderr, "=== outputstr fr:%d/%d  tb:%d/%d dur:%lld\n",output_stream->r_frame_rate.num,output_stream->r_frame_rate.den,output_stream->time_base.num,output_stream->time_base.den,output_stream->duration);
+    fprintf(stderr, "===  inputstr fr:%d/%d  tb:%d/%d dur:%lld\n",input_stream->r_frame_rate.num,input_stream->r_frame_rate.den,input_stream->time_base.num,input_stream->time_base.den,input_stream->duration);
+    
     output_codec_context = output_stream->codec;
+	
 	av_opt_set_defaults(output_codec_context);
 
     output_codec_context->codec_id = input_codec_context->codec_id;
@@ -132,13 +139,9 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
     output_codec_context->extradata = input_codec_context->extradata;
     output_codec_context->extradata_size = input_codec_context->extradata_size;
 
-    if (av_q2d(input_codec_context->time_base) * input_codec_context->ticks_per_frame > av_q2d(input_stream->time_base) && av_q2d(input_stream->time_base) < 1.0 / 1000) {
-        output_codec_context->time_base = input_codec_context->time_base;
-        output_codec_context->time_base.num *= input_codec_context->ticks_per_frame;
-    } else {
-        output_codec_context->time_base = input_stream->time_base;
-    }
+    output_codec_context->time_base = input_stream->time_base;
 
+	
     switch (input_codec_context->codec_type) {
         case AVMEDIA_TYPE_AUDIO:
 
@@ -165,6 +168,18 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
         default:
             break;
     }
+    
+	AVRational res_rational;
+	int64_t res_int64;
+	if (av_opt_get_q(input_codec_context,"time_base",AV_OPT_SEARCH_CHILDREN,&res_rational)==0){
+		av_opt_set_q(output_codec_context,"time_base",res_rational,AV_OPT_SEARCH_CHILDREN);
+	}
+	if (av_opt_get_int(input_codec_context,"ticks_per_frame",AV_OPT_SEARCH_CHILDREN,&res_int64)==0){
+		av_opt_set_int(output_codec_context,"ticks_per_frame",res_int64,AV_OPT_SEARCH_CHILDREN);
+	}
+	if (av_opt_get_int(input_codec_context,"bits_per_raw_sample",AV_OPT_SEARCH_CHILDREN,&res_int64)==0){
+		av_opt_set_int(output_codec_context,"bits_per_raw_sample",res_int64,AV_OPT_SEARCH_CHILDREN);
+	}
 
     return output_stream;
 }
@@ -334,6 +349,7 @@ int main(int argc, const char *argv[]) {
     }
 
     av_dump_format(ic, 0, inputFilename, 0);
+	opt_list(ic,0);
 
     for (i = 0; i < ic->nb_streams && (video_index < 0 || audio_index < 0); i++) {
         switch (ic->streams[i]->codec->codec_type) {
@@ -384,6 +400,14 @@ int main(int argc, const char *argv[]) {
 	oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
     newFile = 1;
 	
+	if (in_video_st->codec->codec_id==CODEC_ID_H264) {
+		bsf_h264_mp4toannexb=av_bitstream_filter_init("h264_mp4toannexb");
+		if (bsf_h264_mp4toannexb) {
+			fprintf(stderr, "INFO: using h264_mp4toannexb bitstream filter!\n");
+			video_opts.bitstream_filters=bsf_h264_mp4toannexb;
+		}
+	}
+	
 	video_opts.skiptokeyframe=1;
 	audio_opts.skiptokeyframe=1;
 	video_opts.interleave_write=(outputStreams==(OUTPUT_STREAM_VIDEO|OUTPUT_STREAM_AUDIO));
@@ -406,7 +430,8 @@ int main(int argc, const char *argv[]) {
     double current_segment_length_up_to_this_packet=0;
 	int64_t in_video_pts_base=AV_NOPTS_VALUE;
 	int64_t in_audio_pts_base=AV_NOPTS_VALUE;
-	
+	int64_t current_segment_length_up_to_this_packet_in_timebase;
+	int64_t current_segment_length_in_timebase;
 	//we break the input over keyframes from which stream:
 	int sync_stream_index=(outputStreams & OUTPUT_STREAM_VIDEO?video_index:audio_index);
     do {
@@ -427,12 +452,17 @@ int main(int argc, const char *argv[]) {
         {
             if (is_video) {
 				if (in_video_pts_base==AV_NOPTS_VALUE) in_video_pts_base=packet.pts;
-				input_time = (double) (packet.pts - in_video_pts_base)  * input_time_constant_v; //we do video output (we have video frame at this point) we calculate time based on it
+				current_segment_length_in_timebase=packet.pts - in_video_pts_base;
+				input_time = (double)current_segment_length_in_timebase  * input_time_constant_v; //we do video output (we have video frame at this point) we calculate time based on it
 			} else {
 				if (in_audio_pts_base==AV_NOPTS_VALUE) in_audio_pts_base=packet.pts;
-				if ((outputStreams & OUTPUT_STREAM_VIDEO)==0) input_time = (double) (packet.pts - in_audio_pts_base) * input_time_constant_a; //we do audio output and we don't do video so base time on audio
+				if ((outputStreams & OUTPUT_STREAM_VIDEO)==0) {
+					current_segment_length_in_timebase=packet.pts - in_audio_pts_base;
+					input_time = (double)current_segment_length_in_timebase * input_time_constant_a; //we do audio output and we don't do video so base time on audio
+				}
 			}
 			if (segment_start==-1) segment_start=input_time;
+			current_segment_length_up_to_this_packet_in_timebase=current_segment_length_in_timebase;
 			current_segment_length_up_to_this_packet=current_segment_length;
 			current_segment_length=input_time-segment_start;
 		}
@@ -444,12 +474,16 @@ int main(int argc, const char *argv[]) {
         if ( packet.stream_index==sync_stream_index && current_segment_length_up_to_this_packet  >= segmentLength - 0.5 && (packet.flags & AV_PKT_FLAG_KEY)) {
             actual_segment_durations[++last_segment] = current_segment_length_up_to_this_packet;
 			fprintf(stderr, "INFO: Segment %d has duration time %lf\n", last_segment, current_segment_length_up_to_this_packet);
+			out_video_st->duration=current_segment_length_up_to_this_packet_in_timebase;
+			fprintf(stderr, "--- outputstr fr:%d/%d  tb:%d/%d dur:%lld\n",out_video_st->r_frame_rate.num,out_video_st->r_frame_rate.den,out_video_st->time_base.num,out_video_st->time_base.den,out_video_st->duration);
 			av_write_trailer(oc);
             avio_flush(oc->pb);
             avio_close(oc->pb);
 			avformat_free_context(oc);
 			
 
+			break;
+			
             snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 			
 			oc=newOutputFile(currentOutputFileName,output_format,in_video_st,in_audio_st,&out_video_st,&out_audio_st);
