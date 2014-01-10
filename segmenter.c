@@ -357,14 +357,14 @@ int write_index_file(const char index[], const char tmp_index[], const unsigned 
 
 int main(int argc, const char *argv[]) {
     //input parameters
-    char inputFilename[MAX_FILENAME_LENGTH], playlistFilename[MAX_FILENAME_LENGTH], baseDirName[MAX_FILENAME_LENGTH], baseFileName[MAX_FILENAME_LENGTH];
-    char baseFileExtension[5]; //either "ts", "aac" or "mp3"
+    char inputFilename[MAX_FILENAME_LENGTH+1], playlistFilename[MAX_FILENAME_LENGTH+1], baseDirName[MAX_FILENAME_LENGTH+1], baseFileName[MAX_FILENAME_LENGTH+1];
+    char baseFileExtension[10]; //either "ts", "aac" or "mp3"
     int segmentLength, outputStreams, verbosity, version,usage,doid3;
 
 
 
-    char currentOutputFileName[MAX_FILENAME_LENGTH];
-    char tempPlaylistName[MAX_FILENAME_LENGTH];
+    char currentOutputFileName[MAX_FILENAME_LENGTH+1];
+    char tempPlaylistName[MAX_FILENAME_LENGTH+1];
 
 
     //these are used to determine the exact length of the current segment
@@ -491,7 +491,7 @@ int main(int argc, const char *argv[]) {
         switch (ic->streams[audio_index]->codec->codec_id) {
             case CODEC_ID_MP3:
                 fprintf(stderr, "Setting output audio to mp3.");
-                strncpy(baseFileExtension, ".mp3", strlen(".mp3"));
+                strncpy(baseFileExtension, ".mp3", 9);
                 ofmt = av_guess_format("mp3", NULL, NULL);
                 break;
             case CODEC_ID_AAC:
@@ -547,7 +547,7 @@ int main(int argc, const char *argv[]) {
         }
     }
 
-    snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+    snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 
     if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
         fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
@@ -624,7 +624,7 @@ int main(int argc, const char *argv[]) {
             stat(currentOutputFileName, &st);
             output_bytes += st.st_size;
 
-            snprintf(currentOutputFileName, strlen(baseDirName) + strlen(baseFileName) + strlen(baseFileExtension) + 10, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+            snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
             if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
                 fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
                 break;
