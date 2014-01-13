@@ -5,4 +5,4 @@ include(detectFFMpeg.cmake)
 
 
 add_executable(segmenter segmenter.c options_parsing.c helpers.c id3handling.c)
-target_link_libraries(segmenter -lavformat -lavcodec -lavutil ${FFMPEG_LIBS})
+target_link_libraries(segmenter -lm -lavformat -lavcodec -lavutil ${FFMPEG_LIBS})

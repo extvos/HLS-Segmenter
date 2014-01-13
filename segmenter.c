@@ -167,7 +167,7 @@ int main(int argc, const char *argv[]) {
     //these are used to determine the exact length of the current segment
     double prev_segment_time = 0;
     double segment_time;
-    unsigned int actual_segment_durations[2048];
+    unsigned int actual_segment_durations[MAX_SEGMENTS];
     double packet_time = 0;
 
     //new variables to keep track of output size
@@ -183,7 +183,7 @@ int main(int argc, const char *argv[]) {
     int video_index;
     int audio_index;
     unsigned int first_segment = 1;
-    unsigned int last_segment = 0;
+    unsigned int num_segments = 0;
     int write_index = 1;
     int decode_done;
     int ret;
@@ -362,7 +362,7 @@ int main(int argc, const char *argv[]) {
     }
 
     //no segment info is written here. This just creates the shell of the playlist file
-    write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
+    //write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
 
     do {
         AVPacket packet;
@@ -414,8 +414,8 @@ int main(int argc, const char *argv[]) {
             avio_close(oc->pb);
 
             if (write_index) {
-                actual_segment_durations[++last_segment] = (unsigned int) rint(segment_time - prev_segment_time);
-                write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
+                actual_segment_durations[++num_segments] = (unsigned int) rint(segment_time - prev_segment_time);
+                write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 0,  baseFileName, baseFileExtension, 0);
                 fprintf(stderr, "Writing index file at time %lf\n", packet_time);
             }
 
@@ -497,17 +497,14 @@ int main(int argc, const char *argv[]) {
 
 
     if (write_index) {
-        actual_segment_durations[++last_segment] = (unsigned int) rint(packet_time - prev_segment_time);
-
-        //make sure that the last segment length is not zero
-        if (actual_segment_durations[last_segment] == 0)
-            actual_segment_durations[last_segment] = 1;
-
-        write_index_file(playlistFilename, tempPlaylistName, segmentLength, actual_segment_durations, baseDirName, baseFileName, baseFileExtension, first_segment, last_segment);
+		actual_segment_durations[++num_segments] = (unsigned int) rint(packet_time - prev_segment_time);
+        if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
+		write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 0,  baseFileName, baseFileExtension, 0);
+		
 
     }
 
-    write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
+    //write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
 
     return 0;
 }

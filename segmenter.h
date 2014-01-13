@@ -27,14 +27,11 @@
 extern "C" {
 #endif
 
+#include <stdlib.h>
 
 #define PROGRAM_VERSION "0.2"
-//SDR: don't ask! I don't know either 
-#define IMAGE_ID3_SIZE 9171
-#define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
 
-#include <stddef.h>
-
+#define MAX_SEGMENTS 2048
 #define MAX_FILENAME_LENGTH 1024
 #define MAXT_EXT_LENGTH 9
 //type of output to perform
@@ -42,6 +39,10 @@ extern "C" {
 #define OUTPUT_STREAM_VIDEO 2
 #define OUTPUT_STREAM_AV (OUTPUT_STREAM_AUDIO | OUTPUT_STREAM_VIDEO)
 
+//SDR: don't ask! I don't know either 
+#define IMAGE_ID3_SIZE 9171
+#define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
+	
 //options_parsing.c:
 void printBanner();
 void printUsage();
