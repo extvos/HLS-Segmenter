@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Stoian Ivanov
+ * Copyright (c) 2014 Stoian Ivanov
  * Copyright (c) 2009 Chase Douglas
  *
  * This program is free software; you can redistribute it and/or
@@ -53,17 +53,17 @@ void printBanner() {
 void printUsage_short(int shortonly){
 	printBanner();
 	if (shortonly) fprintf(stderr, "\n");
-	fprintf(stderr, "Usage: segmenter -i infile [-d baseDir] [-f baseFileName] [-o playListFile.m3u8] [-l 10] [-a|-v] [-t] \n");
+	fprintf(stderr, "Usage: segmenter -i infile [-d baseDir] [-f baseFileName] [-o playListFile.m3u8] [-l] [-a|-v] [-t] \n");
 	if (shortonly) fprintf(stderr, "  segmenter -h for full help\n");
 }
 
 void printUsage() {
 	printUsage_short(0);
 	fprintf(stderr, "\nOptions (you can use -- or - for short option prefix e.g. -i == --i): \n");
-	fprintf(stderr, "-i <infile>\t\tInput file. Required.\n");
+	fprintf(stderr, "-i <infile>\t\tInput file. Required. - is translated to 'pipe:' before handling to libav \n");
 	fprintf(stderr, "-o <outfile>\t\tPlaylist file to create. Default is <infile>.m3u8 \n");
 	fprintf(stderr, "-d <basedir>\t\tThe base directory for files. Default is  '.'\n");
-	fprintf(stderr, "-f <baseFileName>\tSegment files will be named <baseFileName>-#. Default is <infile>\n");
+	fprintf(stderr, "-f <baseFileName>\tSegment files will be named <baseFileName>-#. Default is <outfile>\n");
 	fprintf(stderr, "-l <segment length>\tThe length of each segment. Default is 5\n");
 	fprintf(stderr, "-t\t\t\tEnable id3 tagging code (EXPERIMENTAL)\n");
 	fprintf(stderr, "-a\t\t\taudio only decode for < 64k streams.\n");
@@ -86,15 +86,21 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
             return INVALID;
 		}
 		
-        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH - 1);
-        option[MAX_FILENAME_LENGTH - 1] = 0;
-
+        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
+		
         //check for valid file name
         if (!isalpha(option[0]) && !isdigit(option[0]) && option[0] != '-' && option[0] != '/' && option[0] != '.') {
             fprintf(stderr,"ERROR: input filename must start with alpha, digit, / or . \n");
             return INVALID;
         }
-
+        if (option[0]=='-' && option[1]==0)  {
+			option[0]='p';
+			option[1]='i';
+			option[2]='p';
+			option[3]='e';
+			option[4]=':';
+			option[5]=0;
+		}
         optionIndex++;
         return INPUT_FILE;
     }
@@ -128,7 +134,7 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
             return INVALID;
 		}
 		
-        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH - 2);
+        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
 
         //make sure it ends in a slash
         int l = strnlen(option,MAX_FILENAME_LENGTH - 2);
@@ -154,7 +160,7 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
             return INVALID;
 		}
 		
-        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH - 1);
+        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
 
         //check for valid file name
         if (!isalpha(option[0]) && !isdigit(option[0]) && option[0] != '-' && option[0] != '/' && option[0] != '.') {
@@ -181,7 +187,7 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
             fprintf(stderr,"ERROR: length must be given after -l\n");
             return INVALID;
 		}		
-        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH - 1);
+        strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
         option[MAX_FILENAME_LENGTH - 1] = 0;
 
         int a = strtol(option, NULL, 10);
@@ -221,9 +227,7 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
 
 #define INPUT_FILE_INDEX 0
 #define OUTPUT_FILE_INDEX 1
-#define OUTPUT_DIR_INDEX 2
-#define OUTPUT_BASE_NAME_INDEX 3
-#define OUTPUT_SEGMENT_LENGTH_INDEX 4
+#define OUTPUT_BASE_NAME_INDEX 2
 
 //assumes that the pointers have allocated memory
 
@@ -234,49 +238,49 @@ int parseCommandLine(
 	int argc, const char * argv[]
 ) {
 	printBanner();
-	
-    int requiredOptions[5] = {0, 0, 0, 0, 0};
+	int requiredOptions[3] = {0, 0, 0};
 
-    inputOption result;
-    char option[MAX_FILENAME_LENGTH];
+	inputOption result;
+	char option[MAX_FILENAME_LENGTH];
 
-    //default video and audio output
-    *verbosity = 0;
-    *version = 0;
+	//default video and audio output
+	*verbosity = 0;
+	*version = 0;
 	*usage = 0;
 	*doid3tag = 0;
-    *outputStreams = OUTPUT_STREAM_AV;
-    strncpy(baseExtension, ".ts", strlen(".ts"));
+	*segmentLength=5;
+	*outputStreams = OUTPUT_STREAM_AV;
+	strncpy(baseExtension, ".ts",MAXT_EXT_LENGTH);
+	baseDir[0]='.';baseDir[1]=0;
 
-    while (1) {
-        result = getNextOption(argc, argv, option);
-        switch (result) {
-            case INPUT_FILE:
-                strncpy(inputFile, option, MAX_FILENAME_LENGTH);
-                requiredOptions[INPUT_FILE_INDEX] = 1;
-                break;
-            case OUTPUT_FILE:
-                strncpy(outputFile, option, MAX_FILENAME_LENGTH);
-                requiredOptions[OUTPUT_FILE_INDEX] = 1;
-                break;
-            case OUTPUT_DIR:
-                strncpy(baseDir, option, MAX_FILENAME_LENGTH);
-                requiredOptions[OUTPUT_DIR_INDEX] = 1;
-                break;
-            case OUTPUT_BASE_NAME:
-                strncpy(baseName, option, MAX_FILENAME_LENGTH);
-                requiredOptions[OUTPUT_BASE_NAME_INDEX] = 1;
-                break;
-            case OUTPUT_AUDIO_ONLY:
+	while (1) {
+		result = getNextOption(argc, argv, option);
+		switch (result) {
+			case INPUT_FILE:
+				strncpy(inputFile, option, MAX_FILENAME_LENGTH);
+				requiredOptions[INPUT_FILE_INDEX] = 1;
+				break;
+			case OUTPUT_FILE:
+				strncpy(outputFile, option, MAX_FILENAME_LENGTH);
+				requiredOptions[OUTPUT_FILE_INDEX] = 1;
+				break;
+			case OUTPUT_DIR:
+				strncpy(baseDir, option, MAX_FILENAME_LENGTH);
+				break;
+			case OUTPUT_BASE_NAME:
+				strncpy(baseName, option, MAX_FILENAME_LENGTH);
+				requiredOptions[OUTPUT_BASE_NAME_INDEX] = 1;
+				break;
+			case OUTPUT_AUDIO_ONLY:
 				if (*outputStreams != OUTPUT_STREAM_AV) {
 					fprintf(stderr, "ERROR: Conflicting -v and -a.\n");
 					return -1;
 				} else {
 					*outputStreams = OUTPUT_STREAM_AUDIO;
-					strncpy(baseExtension, ".aac", strlen(".aac"));
+					strncpy(baseExtension, ".aac", MAXT_EXT_LENGTH);
 				}
-                break;
-            case OUTPUT_VIDEO_ONLY:
+				break;
+			case OUTPUT_VIDEO_ONLY:
 				if (*outputStreams != OUTPUT_STREAM_AV) {
 					fprintf(stderr, "ERROR: Conflicting -v and -a.\n");
 					return -1;
@@ -284,62 +288,84 @@ int parseCommandLine(
 					*outputStreams = OUTPUT_STREAM_VIDEO;
 					break;
 				}
-            case ENABLE_ID3TAGS:
-                *doid3tag = 1;
-                break;
-            case SEGMENT_LENGTH:
-                *segmentLength = strtol(option, NULL, 10);
-                requiredOptions[OUTPUT_SEGMENT_LENGTH_INDEX] = 1;
-            case OUTPUT_VERBOSITY:
-                *verbosity = strtol(option, NULL, 10);
-                break;
-            case VERSION:
-                *version = 1;
-                break;
-            case PRINT_USAGE:
-                *usage = 1;
-                break;
-            case NO_MORE_OPTIONS:
-            {
+			case ENABLE_ID3TAGS:
+				*doid3tag = 1;
+				break;
+			case SEGMENT_LENGTH:
+				*segmentLength = strtol(option, NULL, 10);
+			case OUTPUT_VERBOSITY:
+				*verbosity = strtol(option, NULL, 10);
+				break;
+			case VERSION:
+				*version = 1;
+				break;
+			case PRINT_USAGE:
+				*usage = 1;
+				break;
+			case NO_MORE_OPTIONS:
+			{
 				if (argc==1) *usage=1;
-                if (*version == 1 || *usage == 1) 
-                    return 0;
+				if (*version == 1 || *usage == 1) 
+					return 0;
+				
+				int missing = 0;
 
-                int missing = 0;
+				if (requiredOptions[INPUT_FILE_INDEX] == 0) {
+					fprintf(stderr, "ERROR: Missing required option --i for input file.\n");
+					missing = 1;
+					return -1;
+				}
+				if (requiredOptions[OUTPUT_FILE_INDEX] == 0) {
+					char *from=inputFile,*to=outputFile,*lastd=NULL,cc; 
+					while (cc=*from) {
+						from++;
+						*to=cc;
+						if (cc=='.') lastd=to;
+						to++;
+					}
+					*to=0;
+					if (!lastd) lastd=to;
+					if (lastd-outputFile<MAX_FILENAME_LENGTH-5){
+						if (*lastd!='.') *lastd='.';
+						lastd[1]='m';
+						lastd[2]='3';
+						lastd[3]='u';
+						lastd[4]='8';
+						lastd[5]=0;
+					}
+				}
+				
 
-                if (requiredOptions[INPUT_FILE_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --i for input file.\n");
-                    missing = 1;
-                }
-                if (requiredOptions[OUTPUT_FILE_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --o for output playlist file.\n");
-                    missing = 1;
-                }
-                if (requiredOptions[OUTPUT_DIR_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --d for output base directory.\n");
-                    missing = 1;
-                }
-                if (requiredOptions[OUTPUT_BASE_NAME_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --f for file base name.\n");
-                    missing = 1;
-                }
-                if (requiredOptions[OUTPUT_SEGMENT_LENGTH_INDEX] == 0) {
-                    fprintf(stderr, "ERROR: Missing required option --l for segment length.\n");
-                    missing = 1;
-                }
+				if (requiredOptions[OUTPUT_BASE_NAME_INDEX] == 0) {
+					char *from=outputFile,*to=baseName,*lastd=NULL,cc; 
+					while (cc=*from) {
+						from++;
+						*to=cc;
+						if (cc=='.') lastd=to;
+						to++;
+					}
+					*to=0;
+					if (!lastd) {
+						lastd=to;
+						lastd[0]='-';
+						lastd[1]='p';
+						lastd[2]='0';
+					} else lastd[0]=0;
+					
+				}
 
-                if (missing == 1) {
-                    printUsage_short(1);
-                    return -1;
-                }
+				if (missing == 1) {
+					printUsage_short(1);
+					return -1;
+				}
 
-                return 0;
-            }
-            case INVALID:
-            default:
-                return -1;
-        }
-    }
+				return 0;
+			}
+			case INVALID:
+			default:
+				return -1;
+		}
+	}
 
-    return 0;
+	return 0;
 }

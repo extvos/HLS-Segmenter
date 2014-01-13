@@ -29,198 +29,7 @@
 #include "segmenter.h"
 #include "libavformat/avformat.h"
 
-#define IMAGE_ID3_SIZE 9171
 
-
-void ffmpeg_version() {
-	printBanner();
-    // output build and version numbers
-    fprintf(stderr, "libav versions:\n");
-    fprintf(stderr, "  libavutil version:   %s\n", AV_STRINGIFY(LIBAVUTIL_VERSION));
-    fprintf(stderr, "  libavutil build:     %d\n", LIBAVUTIL_BUILD);
-    fprintf(stderr, "  libavcodec version:  %s\n", AV_STRINGIFY(LIBAVCODEC_VERSION));
-    fprintf(stdout, "  libavcodec build:    %d\n", LIBAVCODEC_BUILD);
-    fprintf(stderr, "  libavformat version: %s\n", AV_STRINGIFY(LIBAVFORMAT_VERSION));
-    fprintf(stderr, "  libavformat build:   %d\n", LIBAVFORMAT_BUILD);
-	
-    fprintf(stderr, "This tool is version " PROGRAM_VERSION ",  built on " __DATE__ " " __TIME__);
-#ifdef __GNUC__
-    fprintf(stderr, ", with gcc: " __VERSION__ "\n");
-#else
-    fprintf(stderr, ", using a non-gcc compiler\n");
-#endif
-}
-
-
-void build_id3_tag(char * id3_tag, size_t max_size) {
-    int i;
-    for (i = 0; i < max_size; i++)
-        id3_tag[i] = 0;
-
-    id3_tag[0] = 'I';
-    id3_tag[1] = 'D';
-    id3_tag[2] = '3';
-    id3_tag[3] = 4;
-    id3_tag[9] = '?';
-    id3_tag[10] = 'P';
-    id3_tag[11] = 'R';
-    id3_tag[12] = 'I';
-    id3_tag[13] = 'V';
-    id3_tag[17] = '5';
-
-    char id3_tag_name[] = "com.apple.streaming.transportStreamTimestamp";
-    strncpy(&id3_tag[20], id3_tag_name, strlen(id3_tag_name));
-
-
-}
-
-void build_image_id3_tag(unsigned char * image_id3_tag) {
-    FILE * infile = fopen("/home/rrtnode/rrt/lib/audio.id3", "rb");
-
-    if (!infile) {
-        fprintf(stderr, "Could not open audio image id3 tag.");
-        exit(0);
-    }
-
-    fread(image_id3_tag, IMAGE_ID3_SIZE, 1, infile);
-    fclose(infile);
-}
-
-void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts) {
-    id3_tag[max_size - 1] = pts & 0xFF;
-    id3_tag[max_size - 2] = (pts >> 8) & 0xFF;
-    id3_tag[max_size - 3] = (pts >> 16) & 0xFF;
-    id3_tag[max_size - 4] = (pts >> 24) & 0xFF;
-    //TODO 33rd bit????
-}
-
-void debugReturnCode(int r) {
-    switch (r) {
-#if USE_OLD_FFMPEG
-        case AVERROR_UNKNOWN:
-#else
-        case AVERROR(EINVAL):
-#endif
-            /**< unknown error */
-            fprintf(stderr, "Unknown error.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_IO:
-#else
-        case AVERROR(EIO):
-#endif             
-            /**< I/O error */
-            fprintf(stderr, "I/O error.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NUMEXPECTED:
-#else
-        case AVERROR(EDOM):
-#endif			    
-            /**< Number syntax expected in filename. */
-            fprintf(stderr, "Number syntax expected in filename.\n");
-            break;
-        case AVERROR_INVALIDDATA:
-            /**< invalid data found */
-            fprintf(stderr, "Invalid data found.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOMEM:
-#else
-        case AVERROR(ENOMEM):
-#endif        
-            /**< not enough memory */
-            fprintf(stderr, "Not enough memory.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOFMT:
-#else
-        case AVERROR(EILSEQ):
-#endif         
-            /**< unknown format */
-            fprintf(stderr, "Unknown format.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOTSUPP:
-#else
-        case AVERROR(ENOSYS):
-#endif       
-            /**< Operation not supported. */
-            fprintf(stderr, "Operation not supported.\n");
-            break;
-#if USE_OLD_FFMPEG
-        case AVERROR_NOENT:
-#else
-        case AVERROR(ENOENT):
-#endif        
-            /**< No such file or directory. */
-            fprintf(stderr, "No such file or directory.\n");
-            break;
-        case AVERROR_EOF:
-            /**< End of file. */
-            fprintf(stderr, "End of file.\n");
-            break;
-        case AVERROR_PATCHWELCOME:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Not yet implemented in FFmpeg. Patches welcome.\n");
-            break;
-#if USE_OLD_FFMPEG
-            /**< Codes For Old FFMPEG Deprecated. */
-#else
-            /**< New Error Codes For FFMPEG. */
-        case AVERROR_BUG:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG\n");
-            break;
-        case AVERROR_BUG2:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Internal bug. AVERROR_BUG2.\n");
-            break;
-        case AVERROR_STREAM_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Stream not found.\n");
-            break;
-        case AVERROR_PROTOCOL_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Protocol not found.\n");
-            break;
-        case AVERROR_OPTION_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Option not found.\n");
-            break;
-        case AVERROR_MUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Muxer not found. \n");
-            break;
-        case AVERROR_FILTER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Filter not found.\n");
-            break;
-        case AVERROR_EXIT:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Immediate exit was requested; the called function should not be restarted.\n");
-            break;
-        case AVERROR_ENCODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Encoder not found.\n");
-            break;
-        case AVERROR_DEMUXER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Demuxer not found.\n");
-            break;
-        case AVERROR_DECODER_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Decoder not found.\n");
-            break;
-        case AVERROR_BSF_NOT_FOUND:
-            /**< Not yet implemented in FFmpeg. Patches welcome. */
-            fprintf(stderr, "Bitstream filter not found.\n");
-            break;
-#endif	
-        default:
-            fprintf(stderr, "Unknown return code: %d\n", r);
-    }
-}
 
 void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
     FILE * outputFile;
@@ -294,77 +103,65 @@ static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStr
     return output_stream;
 }
 
-int write_index_file(const char index[], const char tmp_index[], const unsigned int planned_segment_duration, const unsigned int actual_segment_duration[],
-        const char output_directory[], const char output_prefix[], const char output_file_extension[],
-        const unsigned int first_segment, const unsigned int last_segment) {
-    FILE *index_fp;
-    char *write_buf;
-    unsigned int i;
+int write_index_file(
+		const char *index, const char *tmp_index, 
+		unsigned int planned_segment_duration,unsigned int numsegments, unsigned int *actual_segment_duration, unsigned int segment_number_offset, 
+        const char *output_prefix, const char *output_file_extension,int islast
+) {
+	if (numsegments<1) return 0;
+	FILE *tmp_index_fp;
 
-    index_fp = fopen(tmp_index, "w");
-    if (!index_fp) {
+	unsigned int i;
+
+	tmp_index_fp = fopen(tmp_index, "w");
+	if (!tmp_index_fp) {
         fprintf(stderr, "Could not open temporary m3u8 index file (%s), no index file will be created\n", tmp_index);
         return -1;
     }
 
-    write_buf = malloc(sizeof (char) * 1024);
-    if (!write_buf) {
-        fprintf(stderr, "Could not allocate write buffer for index file, index file will be invalid\n");
-        fclose(index_fp);
-        return -1;
+
+    unsigned int maxDuration = actual_segment_duration[0];
+
+    for (i = 1; i <numsegments; i++) if (actual_segment_duration[i] > maxDuration) maxDuration = actual_segment_duration[i];
+
+
+
+	fprintf(tmp_index_fp,  "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n", maxDuration);
+	
+
+	for (i = 0; i <numsegments; i++) {
+		if (fprintf(tmp_index_fp, "#EXTINF:%u,\n%s-%u%s\n", actual_segment_duration[i], output_prefix, i+segment_number_offset, output_file_extension)<0){
+			fprintf(stderr, "Failed to write to tmp m3u8 index file\n");
+			return -1;
+		}
     }
 
-    unsigned int maxDuration = planned_segment_duration;
-
-    for (i = first_segment; i <= last_segment; i++)
-        if (actual_segment_duration[i] > maxDuration)
-            maxDuration = actual_segment_duration[i];
-
-
-
-    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%u\n", maxDuration);
-
-    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
-        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
-        free(write_buf);
-        fclose(index_fp);
-        return -1;
-    }
-
-    for (i = first_segment; i <= last_segment; i++) {
-        snprintf(write_buf, 1024, "#EXTINF:%u,\n%s-%u%s\n", actual_segment_duration[i], output_prefix, i, output_file_extension);
-        if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
-            fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
-            free(write_buf);
-            fclose(index_fp);
-            return -1;
-        }
-    }
-
-    snprintf(write_buf, 1024, "#EXT-X-ENDLIST\n");
-    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
-        fprintf(stderr, "Could not write last file and endlist tag to m3u8 index file\n");
-        free(write_buf);
-        fclose(index_fp);
-        return -1;
-    }
-
-    free(write_buf);
-    fclose(index_fp);
+    if (islast) {
+		if (fprintf(tmp_index_fp, "#EXT-X-ENDLIST\n")<0){
+			fprintf(stderr, "Failed to write to tmp m3u8 index file\n");
+			return -1;
+		};
+	}
+	fclose(tmp_index_fp);
 
     return rename(tmp_index, index);
 }
 
 int main(int argc, const char *argv[]) {
     //input parameters
-    char inputFilename[MAX_FILENAME_LENGTH+1], playlistFilename[MAX_FILENAME_LENGTH+1], baseDirName[MAX_FILENAME_LENGTH+1], baseFileName[MAX_FILENAME_LENGTH+1];
-    char baseFileExtension[10]; //either "ts", "aac" or "mp3"
+	FNHOLDER(inputFilename);
+	FNHOLDER(playlistFilename);
+	FNHOLDER(baseDirName);
+	FNHOLDER(baseFileName);
+
+	
+	char baseFileExtension[MAXT_EXT_LENGTH+1];baseFileExtension[MAXT_EXT_LENGTH]=0; //either "ts", "aac" or "mp3"
     int segmentLength, outputStreams, verbosity, version,usage,doid3;
 
 
 
-    char currentOutputFileName[MAX_FILENAME_LENGTH+1];
-    char tempPlaylistName[MAX_FILENAME_LENGTH+1];
+	FNHOLDER(currentOutputFileName);
+	FNHOLDER(tempPlaylistName);
 
 
     //these are used to determine the exact length of the current segment
@@ -405,19 +202,21 @@ int main(int argc, const char *argv[]) {
     if (version) ffmpeg_version();
 	if (version || usage) return 0;
 
-
-    fprintf(stderr, "%s %s\n", playlistFilename, tempPlaylistName);
+	//fprintf(stderr, "Options parsed: inputFilename:%s playlistFilename:%s baseDirName:%s baseFileName:%s baseFileExtension:%s segmentLength:%d\n",inputFilename,playlistFilename,baseDirName,baseFileName,baseFileExtension,segmentLength );
+	
+	
+	snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s/%s", baseDirName, playlistFilename);
+	strncpy(playlistFilename, tempPlaylistName, MAX_FILENAME_LENGTH);
+	snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s.tmp", playlistFilename);
+	
+    fprintf(stderr, "pl:%s tpl:%s\n", playlistFilename, tempPlaylistName);
 
 	if (doid3) {
 		image_id3_tag = malloc(IMAGE_ID3_SIZE);
-		if (outputStreams == OUTPUT_STREAM_AUDIO) build_image_id3_tag(image_id3_tag);
+		if (outputStreams == OUTPUT_STREAM_AUDIO) build_image_id3_tag(image_id3_tag,NULL);
 		build_id3_tag((char *) id3_tag, id3_tag_size);
 	}
 
-    snprintf(tempPlaylistName, strlen(playlistFilename) + strlen(baseDirName) + 1, "%s%s", baseDirName, playlistFilename);
-    strncpy(playlistFilename, tempPlaylistName, strlen(tempPlaylistName));
-    strncpy(tempPlaylistName, playlistFilename, MAX_FILENAME_LENGTH);
-    strncat(tempPlaylistName, ".", 1);
 
     //decide if this is an aac file or a mpegts file.
     //postpone deciding format until later
@@ -491,7 +290,7 @@ int main(int argc, const char *argv[]) {
         switch (ic->streams[audio_index]->codec->codec_id) {
             case CODEC_ID_MP3:
                 fprintf(stderr, "Setting output audio to mp3.");
-                strncpy(baseFileExtension, ".mp3", 9);
+				strncpy(baseFileExtension, ".mp3", MAXT_EXT_LENGTH);
                 ofmt = av_guess_format("mp3", NULL, NULL);
                 break;
             case CODEC_ID_AAC:
@@ -547,7 +346,7 @@ int main(int argc, const char *argv[]) {
         }
     }
 
-    snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+    snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
 
     if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
         fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
@@ -624,7 +423,7 @@ int main(int argc, const char *argv[]) {
             stat(currentOutputFileName, &st);
             output_bytes += st.st_size;
 
-            snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+            snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
             if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
                 fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
                 break;

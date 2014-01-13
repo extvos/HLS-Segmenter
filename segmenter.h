@@ -28,21 +28,38 @@ extern "C" {
 #endif
 
 
+#define PROGRAM_VERSION "0.2"
+//SDR: don't ask! I don't know either 
+#define IMAGE_ID3_SIZE 9171
+#define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
 
-#define PROGRAM_VERSION "0.1"
+#include <stddef.h>
 
 #define MAX_FILENAME_LENGTH 1024
-
+#define MAXT_EXT_LENGTH 9
 //type of output to perform
 #define OUTPUT_STREAM_AUDIO 1
 #define OUTPUT_STREAM_VIDEO 2
 #define OUTPUT_STREAM_AV (OUTPUT_STREAM_AUDIO | OUTPUT_STREAM_VIDEO)
 
-#ifdef  __cplusplus
-}
-#endif
+//options_parsing.c:
 void printBanner();
 void printUsage();
 int parseCommandLine(char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * outputStreams, int * segmentLength, int * verbosity, int * version, int * usage,int * doid3tag, int argc, const char * argv[]);
 
+//id3handling.c:
+void build_id3_tag(char * id3_tag, size_t max_size);
+void build_image_id3_tag(unsigned char * image_id3_tag, const char *srcfile);
+void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts);
+
+
+//helpers.c:
+void ffmpeg_version();
+void debugReturnCode(int r);
+
+#define FNHOLDER(name) char name[MAX_FILENAME_LENGTH+1];name[MAX_FILENAME_LENGTH]=0;
+
+#ifdef  __cplusplus
+}
+#endif
 #endif
