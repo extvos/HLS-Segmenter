@@ -39,19 +39,32 @@ extern "C" {
 #define OUTPUT_STREAM_VIDEO 2
 #define OUTPUT_STREAM_AV (OUTPUT_STREAM_AUDIO | OUTPUT_STREAM_VIDEO)
 
-//SDR: don't ask! I don't know either 
-#define IMAGE_ID3_SIZE 9171
-#define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
+#if USE_OLD_FFMPEG
+#define AV_PKT_FLAG_KEY PKT_FLAG_KEY
+#define AVMEDIA_TYPE_AUDIO CODEC_TYPE_AUDIO
+#define AVMEDIA_TYPE_VIDEO CODEC_TYPE_VIDEO
+#endif
+
 	
 //options_parsing.c:
 void printBanner();
 void printUsage();
-int parseCommandLine(char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * outputStreams, int * segmentLength, int * verbosity, int * version, int * usage,int * doid3tag, int argc, const char * argv[]);
+int parseCommandLine(
+	int argc, const char * argv[],
+	
+	char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * segmentLength, 
+	
+	int * quiet, int * version, int * usage
+	
+);
 
 //id3handling.c:
-void build_id3_tag(char * id3_tag, size_t max_size);
-void build_image_id3_tag(unsigned char * image_id3_tag, const char *srcfile);
-void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts);
+//SDR: don't ask! I don't know either 
+// #define IMAGE_ID3_SIZE 9171
+// #define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
+// void build_id3_tag(char * id3_tag, size_t max_size);
+// char *build_image_id3_tag(const char *srcfile);
+// void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts);
 
 
 //helpers.c:

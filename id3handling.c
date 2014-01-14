@@ -27,6 +27,10 @@
 
 #include "segmenter.h"
 
+////////////
+//B0RKEN!! File left in tree just for refference!
+////////////
+
 void build_id3_tag(char * id3_tag, size_t max_size) {
 	memset (id3_tag,0,max_size);
 	
@@ -47,17 +51,24 @@ void build_id3_tag(char * id3_tag, size_t max_size) {
 	
 }
 
-void build_image_id3_tag(unsigned char * image_id3_tag, const char *srcfile) {
+char * build_image_id3_tag( const char *srcfile, int *image_id3_tag_size) {
+	char *image_id3_tag;
 	if (!srcfile) srcfile=DEFAULT_ID3_TAG_FILE;
-	FILE * infile = fopen(srcfile, "rb");
 	
+	image_id3_tag = malloc(IMAGE_ID3_SIZE);
+	if (image_id3_tag_size) *image_id3_tag_size=IMAGE_ID3_SIZE;
+	
+	if (image_id3_tag == NULL) return NULL;
+	FILE * infile = fopen(srcfile, "rb");
+
 	if (!infile) {
 		fprintf(stderr, "Could not open audio image id3 tag.");
 		exit(0);
 	}
 	
-	fread(image_id3_tag, IMAGE_ID3_SIZE, 1, infile);
+	fread(image_id3_tag, image_id3_tag_size, 1, infile);
 	fclose(infile);
+	return image_id3_tag;
 }
 
 void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts) {

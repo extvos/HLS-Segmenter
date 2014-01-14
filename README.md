@@ -1,12 +1,12 @@
 # iPhone HLS Segmenter
 
-The segmenter will take an input stream (a ffmpeg url, file or stdin) and packet-copy it to HLS segments. 
+The segmenter will take an VIDEO input stream (a ffmpeg url, file or stdin) and packet-copy it to HLS segments. 
 It will also generate .m3u8 playlist 
 
 If output is under httpd document root files are ready to stream. 
 
-The input should be MPEG TS. There is "experimental" (old) code dealing with .mp3 and raw aac streams 
-but it's considered broken (patches are welcome)
+The input should be MPEG TS. The old code dealing with .mp3 and raw aac streams was removed!
+
 
 This project is based on old version of http://www.ioncannon.net/projects/http-live-video-stream-segmenter-and-distributor/
 which was heavily modified for stability. There is a work in progres to add "live" stream creation doing stdin to tmpfs under 

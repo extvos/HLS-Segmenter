@@ -34,9 +34,7 @@
 typedef enum {
 	INPUT_FILE, OUTPUT_FILE, OUTPUT_DIR, OUTPUT_BASE_NAME,SEGMENT_LENGTH,
 	
-	OUTPUT_AUDIO_ONLY,OUTPUT_VIDEO_ONLY,OUTPUT_VERBOSITY,ENABLE_ID3TAGS,
-	
-	VERSION,PRINT_USAGE,
+	QUIET, VERSION, PRINT_USAGE,
 	
 	NO_MORE_OPTIONS,INVALID
 	
@@ -53,7 +51,7 @@ void printBanner() {
 void printUsage_short(int shortonly){
 	printBanner();
 	if (shortonly) fprintf(stderr, "\n");
-	fprintf(stderr, "Usage: segmenter -i infile [-d baseDir] [-f baseFileName] [-o playListFile.m3u8] [-l] [-a|-v] [-t] \n");
+	fprintf(stderr, "Usage: segmenter -i infile [-d baseDir] [-f baseFileName] [-o playListFile.m3u8] [-l <sec>] [-a|-v] [-h] \n");
 	if (shortonly) fprintf(stderr, "  segmenter -h for full help\n");
 }
 
@@ -65,10 +63,8 @@ void printUsage() {
 	fprintf(stderr, "-d <basedir>\t\tThe base directory for files. Default is  '.'\n");
 	fprintf(stderr, "-f <baseFileName>\tSegment files will be named <baseFileName>-#. Default is <outfile>\n");
 	fprintf(stderr, "-l <segment length>\tThe length of each segment. Default is 5\n");
-	fprintf(stderr, "-t\t\t\tEnable id3 tagging code (EXPERIMENTAL)\n");
-	fprintf(stderr, "-a\t\t\taudio only decode for < 64k streams.\n");
-	fprintf(stderr, "-v\t\t\tvideo only decode for < 64k streams.\n\n");
 	fprintf(stderr, "--version\t\tPrint version details and exit.\n");
+	fprintf(stderr, "-q,--quiet\t\tTry to be more quiet.\n");
 	fprintf(stderr, "-h,--help\t\tPrint this info.\n");
 	fprintf(stderr, "\n\n");
 }
@@ -172,14 +168,10 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
         return OUTPUT_BASE_NAME;
     }
 
-    if (strcmp(argv[optionIndex],"-a")==0 || strcmp(argv[optionIndex],"--a")==0) {
+    if (strcmp(argv[optionIndex],"-q")==0 || strcmp(argv[optionIndex],"--q" )==0|| strcmp(argv[optionIndex],"--quiet")==0) {
         optionIndex++;
-        return OUTPUT_AUDIO_ONLY;
+        return QUIET;
     }
-	if (strcmp(argv[optionIndex],"-v")==0 || strcmp(argv[optionIndex],"--v")==0) {
-        optionIndex++;
-        return OUTPUT_VIDEO_ONLY;
-	}
 
 
     if (strcmp(argv[optionIndex],"-l")==0 || strcmp(argv[optionIndex],"--l")==0) {
@@ -214,10 +206,6 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
         optionIndex++;
 		return PRINT_USAGE;
 	}
-	if (strcmp(argv[optionIndex],"-t")==0 || strcmp(argv[optionIndex],"--t")==0) {
-        optionIndex++;
-		return ENABLE_ID3TAGS;
-	}
 	
 	fprintf(stderr, "ERROR: Unknown option %s\n",argv[optionIndex]);
 	
@@ -232,10 +220,12 @@ inputOption getNextOption(int argc, const char * argv[], char * option) {
 //assumes that the pointers have allocated memory
 
 int parseCommandLine(
-	char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, 
-	int * outputStreams, int * segmentLength, int * verbosity, int * version, int * usage, int * doid3tag,
+	int argc, const char * argv[],
 	
-	int argc, const char * argv[]
+	char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * segmentLength, 
+	
+	int * quiet, int * version, int * usage
+	
 ) {
 	printBanner();
 	int requiredOptions[3] = {0, 0, 0};
@@ -244,12 +234,10 @@ int parseCommandLine(
 	char option[MAX_FILENAME_LENGTH];
 
 	//default video and audio output
-	*verbosity = 0;
+	*quiet = 0;
 	*version = 0;
 	*usage = 0;
-	*doid3tag = 0;
 	*segmentLength=5;
-	*outputStreams = OUTPUT_STREAM_AV;
 	strncpy(baseExtension, ".ts",MAXT_EXT_LENGTH);
 	baseDir[0]='.';baseDir[1]=0;
 
@@ -271,30 +259,10 @@ int parseCommandLine(
 				strncpy(baseName, option, MAX_FILENAME_LENGTH);
 				requiredOptions[OUTPUT_BASE_NAME_INDEX] = 1;
 				break;
-			case OUTPUT_AUDIO_ONLY:
-				if (*outputStreams != OUTPUT_STREAM_AV) {
-					fprintf(stderr, "ERROR: Conflicting -v and -a.\n");
-					return -1;
-				} else {
-					*outputStreams = OUTPUT_STREAM_AUDIO;
-					strncpy(baseExtension, ".aac", MAXT_EXT_LENGTH);
-				}
-				break;
-			case OUTPUT_VIDEO_ONLY:
-				if (*outputStreams != OUTPUT_STREAM_AV) {
-					fprintf(stderr, "ERROR: Conflicting -v and -a.\n");
-					return -1;
-				} else {
-					*outputStreams = OUTPUT_STREAM_VIDEO;
-					break;
-				}
-			case ENABLE_ID3TAGS:
-				*doid3tag = 1;
-				break;
 			case SEGMENT_LENGTH:
 				*segmentLength = strtol(option, NULL, 10);
-			case OUTPUT_VERBOSITY:
-				*verbosity = strtol(option, NULL, 10);
+			case QUIET:
+				*quiet = 1;
 				break;
 			case VERSION:
 				*version = 1;
@@ -316,12 +284,13 @@ int parseCommandLine(
 					return -1;
 				}
 				if (requiredOptions[OUTPUT_FILE_INDEX] == 0) {
-					char *from=inputFile,*to=outputFile,*lastd=NULL,cc; 
+					char *from=inputFile,*to=outputFile,*lastd=NULL,cc,*rebase=NULL; 
 					while (cc=*from) {
 						from++;
 						*to=cc;
 						if (cc=='.') lastd=to;
 						to++;
+						if (cc=='/') rebase=to;
 					}
 					*to=0;
 					if (!lastd) lastd=to;
@@ -332,6 +301,14 @@ int parseCommandLine(
 						lastd[3]='u';
 						lastd[4]='8';
 						lastd[5]=0;
+					}
+					if (rebase && *rebase!=0){
+						to=outputFile;
+						while (*rebase!=0){
+							*to=*rebase;
+							rebase++;to++;
+						}
+						*to=0;
 					}
 				}
 				
