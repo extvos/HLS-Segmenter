@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Stoian Ivanov
+ * Copyright (c) 2014 Stoian Ivanov
  * Copyright (c) 2009 Chase Douglas
  *
  * This program is free software; you can redistribute it and/or
