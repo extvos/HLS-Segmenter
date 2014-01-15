@@ -120,7 +120,7 @@ int write_index_file(
 
 
 
-	fprintf(tmp_index_fp,  "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:%u\n#EXT-X-TARGETDURATION:%u\n", maxDuration,segment_number_offset);
+	fprintf(tmp_index_fp,  "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:%u\n#EXT-X-TARGETDURATION:%u\n", segment_number_offset,maxDuration);
 	
 
 	for (i = 0; i <numsegments; i++) {
