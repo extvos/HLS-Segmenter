@@ -158,8 +158,7 @@ int main(int argc, const char *argv[]) {
 
 
 	//these are used to determine the exact length of the current segment
-	double prev_segment_time = 0;
-	double segment_time;
+	double segment_start_time = 0;
 	unsigned int actual_segment_durations[MAX_SEGMENTS];
 	double packet_time = 0;
 
@@ -283,7 +282,7 @@ int main(int argc, const char *argv[]) {
 	if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
 		fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
 		exit(1);
-	}
+	} else fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
 
 	int r = avformat_write_header(oc, NULL);
 	if (r) {
@@ -327,7 +326,7 @@ int main(int argc, const char *argv[]) {
 			if (iskeyframe && waitfirstpacket) {
 				waitfirstpacket=0;
 				prev_packet_time=packet_time;
-				prev_segment_time=packet_time;
+				segment_start_time=packet_time;
 			}
 		} else if (packet.stream_index == in_audio_index){
 			packet.stream_index = out_audio_index;
@@ -346,27 +345,27 @@ int main(int argc, const char *argv[]) {
 		
 		//start looking for segment splits for videos one half second before segment duration expires. This is because the 
 		//segments are split on key frames so we cannot expect all segments to be split exactly equally. 
-		if (iskeyframe &&  packet_time - prev_segment_time >= segmentLength - 0.25) { //a keyframe  near or past segmentLength -> SPLIT
+		if (iskeyframe &&  packet_time - segment_start_time >= segmentLength - 0.25) { //a keyframe  near or past segmentLength -> SPLIT
 			avio_flush(oc->pb);
 			avio_close(oc->pb);
-			actual_segment_durations[num_segments] = (unsigned int) rint(prev_packet_time - prev_segment_time);
+			actual_segment_durations[num_segments] = (unsigned int) rint(prev_packet_time - segment_start_time);
 			num_segments++;
-			write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 1,  baseFileName, baseFileExtension, 0);
-			fprintf(stderr, "Writing index file at time %lf\n", packet_time);
+			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 1,  baseFileName, baseFileExtension, 0);
 
 			
-			struct stat st;
-			stat(currentOutputFileName, &st);
-			output_bytes += st.st_size;
+			//struct stat st;
+			//stat(currentOutputFileName, &st);
+			//output_bytes += st.st_size;
 
-			snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index++, baseFileExtension);
+			output_index++;
+			snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
 			if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
 				fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
 				break;
-			}
- 			prev_segment_time = segment_time;
+			} else fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
+ 			segment_start_time = packet_time;
 		}
-		prev_packet_time=packet_time;
+		if (packet.stream_index == out_video_index) prev_packet_time=packet_time;
 
 		ret = av_write_frame(oc, &packet);
 
@@ -396,17 +395,17 @@ int main(int argc, const char *argv[]) {
 	avio_close(oc->pb);
 	av_free(oc);
 
-	struct stat st;
-	stat(currentOutputFileName, &st);
-	output_bytes += st.st_size;
+// 	struct stat st;
+// 	stat(currentOutputFileName, &st);
+// 	output_bytes += st.st_size;
 
 
-	if (write_index) {
-		actual_segment_durations[++num_segments] = (unsigned int) rint(packet_time - prev_segment_time);
-		if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
-		write_index = !write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 0,  baseFileName, baseFileExtension, 0);
-	}
+	actual_segment_durations[num_segments] = (unsigned int) rint(packet_time - segment_start_time);
+	if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
+	num_segments++;
+	write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 1,  baseFileName, baseFileExtension, 1);
 
+		
 	//write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
 
 	return 0;
