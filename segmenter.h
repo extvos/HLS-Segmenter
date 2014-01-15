@@ -50,11 +50,7 @@ extern "C" {
 void printBanner();
 void printUsage();
 int parseCommandLine(
-	int argc, const char * argv[],
-	
-	char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * segmentLength, 
-	
-	int * quiet, int * version, int * usage
+	   int argc, const char* argv[], char* inputFile, char* outputFile, char* baseDir, char* baseName, char* baseExtension, int* segmentLength, int* listlen, int* quiet, int* version, int* usage
 	
 );
 

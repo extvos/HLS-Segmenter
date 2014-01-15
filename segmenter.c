@@ -26,6 +26,7 @@
 #include <string.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <unistd.h> 
 
 #include "segmenter.h"
 #include "libavformat/avformat.h"
@@ -150,7 +151,7 @@ int main(int argc, const char *argv[]) {
 
 	char baseFileExtension[MAXT_EXT_LENGTH+1];baseFileExtension[MAXT_EXT_LENGTH]=0; //either "ts", "aac" or "mp3"
 	int segmentLength, quiet, version,usage;
-
+ 
 
 
 	FNHOLDER(currentOutputFileName);
@@ -159,7 +160,7 @@ int main(int argc, const char *argv[]) {
 
 	//these are used to determine the exact length of the current segment
 	double segment_start_time = 0;
-	unsigned int actual_segment_durations[MAX_SEGMENTS];
+	unsigned int actual_segment_durations[MAX_SEGMENTS+1];
 	double packet_time = 0;
 
 	//new variables to keep track of output size
@@ -181,9 +182,9 @@ int main(int argc, const char *argv[]) {
 	int decode_done;
 	int ret;
 	int i;
-
-
-	if ( parseCommandLine(argc, argv,inputFilename, playlistFilename, baseDirName, baseFileName, baseFileExtension, &segmentLength, &quiet, &version,&usage) != 0)
+	int listlen;
+	int listofs=1;
+	if ( parseCommandLine(argc, argv,inputFilename, playlistFilename, baseDirName, baseFileName, baseFileExtension, &segmentLength, &listlen, &quiet, &version,&usage) != 0)
 		return 0;
 
 	if (usage) printUsage();
@@ -282,7 +283,7 @@ int main(int argc, const char *argv[]) {
 	if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
 		fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
 		exit(1);
-	} else fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
+	} else if (!quiet) fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
 
 	int r = avformat_write_header(oc, NULL);
 	if (r) {
@@ -350,9 +351,19 @@ int main(int argc, const char *argv[]) {
 			avio_close(oc->pb);
 			actual_segment_durations[num_segments] = (unsigned int) rint(prev_packet_time - segment_start_time);
 			num_segments++;
-			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 1,  baseFileName, baseFileExtension, 0);
+			if (num_segments>listlen) { //move list to exclude last:
+				snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, listofs, baseFileExtension);
+				unlink (currentOutputFileName);
+				listofs++; num_segments--;
+				memmove(actual_segment_durations,actual_segment_durations+1,num_segments*sizeof(actual_segment_durations[0]));
+				
+			}
+			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, (num_segments>=MAX_SEGMENTS));
 
-			
+			if (num_segments==MAX_SEGMENTS) {
+				fprintf(stderr, "Reached \"hard\" max segment number %u. If this is not live stream increase segment duration. If live segmenting set max list lenth (-m ...)\n", MAX_SEGMENTS);
+				break;
+			}
 			//struct stat st;
 			//stat(currentOutputFileName, &st);
 			//output_bytes += st.st_size;
@@ -362,7 +373,7 @@ int main(int argc, const char *argv[]) {
 			if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
 				fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
 				break;
-			} else fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
+			} else if (!quiet) fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
  			segment_start_time = packet_time;
 		}
 		if (packet.stream_index == out_video_index) prev_packet_time=packet_time;
@@ -380,30 +391,30 @@ int main(int argc, const char *argv[]) {
 		av_free_packet(&packet);
 	} while (!decode_done);
 
-	//make sure all packets are written and then close the last file. 
-	avio_flush(oc->pb);
-	av_write_trailer(oc);
-
 	if (in_video_st->codec->codec !=NULL) avcodec_close(in_video_st->codec);
+	if (num_segments<MAX_SEGMENTS) {
+		//make sure all packets are written and then close the last file. 
+		avio_flush(oc->pb);
+		av_write_trailer(oc);
 
+		for (i = 0; i < oc->nb_streams; i++) {
+			av_freep(&oc->streams[i]->codec);
+			av_freep(&oc->streams[i]);
+		}
 
-	for (i = 0; i < oc->nb_streams; i++) {
-		av_freep(&oc->streams[i]->codec);
-		av_freep(&oc->streams[i]);
+		avio_close(oc->pb);
+		av_free(oc);
+		
+		actual_segment_durations[num_segments] = (unsigned int) rint(packet_time - segment_start_time);
+		if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
+		num_segments++;
+		write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, 1);
 	}
-
-	avio_close(oc->pb);
-	av_free(oc);
-
 // 	struct stat st;
 // 	stat(currentOutputFileName, &st);
 // 	output_bytes += st.st_size;
 
 
-	actual_segment_durations[num_segments] = (unsigned int) rint(packet_time - segment_start_time);
-	if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
-	num_segments++;
-	write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, 1,  baseFileName, baseFileExtension, 1);
 
 		
 	//write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
