@@ -9,7 +9,7 @@ The input should be MPEG TS. The old code dealing with .mp3 and raw aac streams 
 
 
 This project is based on old version of http://www.ioncannon.net/projects/http-live-video-stream-segmenter-and-distributor/
-which was heavily modified for stability. There is a work in progres to add "live" stream creation doing stdin to tmpfs under 
+which was heavily modified for stability. It is possible to segment "live" streams from stdin or any ffmpegable url to tmpfs under 
 httpd with limited segment numbers 
 
 ## HOW TO COMPILE
