@@ -123,10 +123,12 @@ void debugReturnCode(int r) {
 				/**< Not yet implemented in FFmpeg. Patches welcome. */
 				fprintf(stderr, "Internal bug. AVERROR_BUG\n");
 				break;
+#ifdef AVERROR_BUG2
 			case AVERROR_BUG2:
 				/**< Not yet implemented in FFmpeg. Patches welcome. */
 				fprintf(stderr, "Internal bug. AVERROR_BUG2.\n");
 				break;
+#endif
 			case AVERROR_STREAM_NOT_FOUND:
 				/**< Not yet implemented in FFmpeg. Patches welcome. */
 				fprintf(stderr, "Stream not found.\n");
