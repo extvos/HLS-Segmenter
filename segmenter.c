@@ -30,7 +30,12 @@
 
 #include "segmenter.h"
 #include "libavformat/avformat.h"
+#include "libavcodec/avcodec.h"
 
+#if LIBAVCODEC_VERSION_MICRO<100 
+#define CODEC_ID_MP3 AV_CODEC_ID_MP3
+#define CODEC_ID_AC3 AV_CODEC_ID_AC3
+#endif
 
 
 void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
