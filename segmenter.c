@@ -39,67 +39,69 @@
 
 
 void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
-    FILE * outputFile;
-    char fullFileName[1024];
-    snprintf(fullFileName, 1024, "%s/%s.size", file_directory, filename_prefix);
+	FILE * outputFile;
+	char fullFileName[1024];
+	snprintf(fullFileName, 1024, "%s/%s.size", file_directory, filename_prefix);
 
-    outputFile = fopen(fullFileName, "w");
-    fprintf(outputFile, "%u", (unsigned int) size);
-    fclose(outputFile);
+	outputFile = fopen(fullFileName, "w");
+	fprintf(outputFile, "%u", (unsigned int) size);
+	fclose(outputFile);
 }
 
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
-    AVCodecContext *input_codec_context;
-    AVCodecContext *output_codec_context;
-    AVStream *output_stream;
+	AVCodecContext *input_codec_context;
+	AVCodecContext *output_codec_context;
+	AVStream *output_stream;
 
-    output_stream = avformat_new_stream(output_format_context, 0);
-    if (!output_stream) {
-        fprintf(stderr, "Could not allocate stream\n");
-        exit(1);
-    }
+	output_stream = avformat_new_stream(output_format_context, 0);
+	if (!output_stream) {
+		fprintf(stderr, "Could not allocate stream\n");
+		exit(1);
+	}
 
-    input_codec_context = input_stream->codec;
-    output_codec_context = output_stream->codec;
+	input_codec_context = input_stream->codec;
+	output_codec_context = output_stream->codec;
 
-    output_codec_context->codec_id = input_codec_context->codec_id;
-    output_codec_context->codec_type = input_codec_context->codec_type;
-    output_codec_context->codec_tag = input_codec_context->codec_tag;
-    output_codec_context->bit_rate = input_codec_context->bit_rate;
-    output_codec_context->extradata = input_codec_context->extradata;
-    output_codec_context->extradata_size = input_codec_context->extradata_size;
+	output_codec_context->codec_id = input_codec_context->codec_id;
+	output_codec_context->codec_type = input_codec_context->codec_type;
+	output_codec_context->codec_tag = input_codec_context->codec_tag;
+	output_codec_context->bit_rate = input_codec_context->bit_rate;
+	output_codec_context->extradata = input_codec_context->extradata;
+	output_codec_context->extradata_size = input_codec_context->extradata_size;
 
-    if (av_q2d(input_codec_context->time_base) * input_codec_context->ticks_per_frame > av_q2d(input_stream->time_base) && av_q2d(input_stream->time_base) < 1.0 / 1000) {
-        output_codec_context->time_base = input_codec_context->time_base;
-        output_codec_context->time_base.num *= input_codec_context->ticks_per_frame;
-    } else {
-        output_codec_context->time_base = input_stream->time_base;
-    }
+	if (av_q2d(input_codec_context->time_base) * input_codec_context->ticks_per_frame > av_q2d(input_stream->time_base) && av_q2d(input_stream->time_base) < 1.0 / 1000) {
+		output_codec_context->time_base = input_codec_context->time_base;
+		output_codec_context->time_base.num *= input_codec_context->ticks_per_frame;
+	} else {
+		output_codec_context->time_base = input_stream->time_base;
+	}
+	output_stream->time_base=output_codec_context->time_base;
+	
+	
+	switch (input_codec_context->codec_type) {
+		case AVMEDIA_TYPE_AUDIO:
+			output_codec_context->channel_layout = input_codec_context->channel_layout;
+			output_codec_context->sample_rate = input_codec_context->sample_rate;
+			output_codec_context->channels = input_codec_context->channels;
+			output_codec_context->frame_size = input_codec_context->frame_size;
+			if ((input_codec_context->block_align == 1 && input_codec_context->codec_id == CODEC_ID_MP3) || input_codec_context->codec_id == CODEC_ID_AC3) {
+				output_codec_context->block_align = 0;
+			} else {
+				output_codec_context->block_align = input_codec_context->block_align;
+			}
+			break;
+		case AVMEDIA_TYPE_VIDEO:
+			output_codec_context->pix_fmt = input_codec_context->pix_fmt;
+			output_codec_context->width = input_codec_context->width;
+			output_codec_context->height = input_codec_context->height;
+			output_codec_context->has_b_frames = input_codec_context->has_b_frames;
 
-    switch (input_codec_context->codec_type) {
-        case AVMEDIA_TYPE_AUDIO:
-            output_codec_context->channel_layout = input_codec_context->channel_layout;
-            output_codec_context->sample_rate = input_codec_context->sample_rate;
-            output_codec_context->channels = input_codec_context->channels;
-            output_codec_context->frame_size = input_codec_context->frame_size;
-            if ((input_codec_context->block_align == 1 && input_codec_context->codec_id == CODEC_ID_MP3) || input_codec_context->codec_id == CODEC_ID_AC3) {
-                output_codec_context->block_align = 0;
-            } else {
-                output_codec_context->block_align = input_codec_context->block_align;
-            }
-            break;
-        case AVMEDIA_TYPE_VIDEO:
-            output_codec_context->pix_fmt = input_codec_context->pix_fmt;
-            output_codec_context->width = input_codec_context->width;
-            output_codec_context->height = input_codec_context->height;
-            output_codec_context->has_b_frames = input_codec_context->has_b_frames;
+			break;
+		default:
+			break;
+	}
 
-            break;
-        default:
-            break;
-    }
-
-    return output_stream;
+	return output_stream;
 }
 
 int write_index_file(
@@ -114,14 +116,14 @@ int write_index_file(
 
 	tmp_index_fp = fopen(tmp_index, "w");
 	if (!tmp_index_fp) {
-        fprintf(stderr, "Could not open temporary m3u8 index file (%s), no index file will be created\n", tmp_index);
-        return -1;
-    }
+		fprintf(stderr, "Could not open temporary m3u8 index file (%s), no index file will be created\n", tmp_index);
+		return -1;
+	}
 
 
-    unsigned int maxDuration = actual_segment_duration[0];
+	unsigned int maxDuration = actual_segment_duration[0];
 
-    for (i = 1; i <numsegments; i++) if (actual_segment_duration[i] > maxDuration) maxDuration = actual_segment_duration[i];
+	for (i = 1; i <numsegments; i++) if (actual_segment_duration[i] > maxDuration) maxDuration = actual_segment_duration[i];
 
 
 
@@ -133,9 +135,9 @@ int write_index_file(
 			fprintf(stderr, "Failed to write to tmp m3u8 index file\n");
 			return -1;
 		}
-    }
+	}
 
-    if (islast) {
+	if (islast) {
 		if (fprintf(tmp_index_fp, "#EXT-X-ENDLIST\n")<0){
 			fprintf(stderr, "Failed to write to tmp m3u8 index file\n");
 			return -1;
@@ -143,7 +145,7 @@ int write_index_file(
 	}
 	fclose(tmp_index_fp);
 
-    return rename(tmp_index, index);
+	return rename(tmp_index, index);
 }
 
 int main(int argc, const char *argv[]) {
@@ -207,6 +209,9 @@ int main(int argc, const char *argv[]) {
 	if (!quiet) av_log_set_level(AV_LOG_DEBUG);
 
 	av_register_all();
+	avformat_network_init(); //just to be safe with later version and be able to handle all kind of input urls
+	
+	
 	ret = avformat_open_input(&ic, inputFilename, NULL, NULL);
 	if (ret != 0) {
 		fprintf(stderr, "Could not open input file %s. Error %d.\n", inputFilename, ret);
