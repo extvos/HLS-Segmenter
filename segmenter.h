@@ -54,14 +54,6 @@ int parseCommandLine(
 	
 );
 
-//id3handling.c:
-//SDR: don't ask! I don't know either 
-// #define IMAGE_ID3_SIZE 9171
-// #define DEFAULT_ID3_TAG_FILE "/home/rrtnode/rrt/lib/audio.id3"
-// void build_id3_tag(char * id3_tag, size_t max_size);
-// char *build_image_id3_tag(const char *srcfile);
-// void fill_id3_tag(char * id3_tag, size_t max_size, unsigned long long pts);
-
 
 //helpers.c:
 void ffmpeg_version();
