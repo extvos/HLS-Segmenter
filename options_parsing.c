@@ -205,7 +205,13 @@ inputOption getNextOption(int argc, const char * argv[], char * option, int *opt
 		}		
 		strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
 		option[MAX_FILENAME_LENGTH - 1] = 0;
-
+		
+		if (strcmp(option,"a")==0 || strcmp(option,"archive")==0) {
+			optionIndex++;
+			if (optioni) *optioni=-1;
+			return LIST_LENGTH;
+		}
+		
 		int a = strtol(option, NULL, 10);
 		if (a == 0 && errno != 0) {
 			fprintf(stderr,"ERROR: list length must be an integer.\n");

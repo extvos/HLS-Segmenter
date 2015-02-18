@@ -16,17 +16,25 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-/**********************************************************************************
+/******************************
+ 
+ 
+ 
+ 
+ * ***************************************************
  * This code is part of HTTP-Live-Video-Stream-Segmenter-and-Distributor
  * look for newer versions at github.com
  **********************************************************************************/
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <sys/stat.h>
-#include <unistd.h> 
+#include <fcntl.h>  
+#include <unistd.h>
+#include <time.h>
 
 #include "segmenter.h"
 #include "libavformat/avformat.h"
@@ -37,16 +45,9 @@
 #define CODEC_ID_AC3 AV_CODEC_ID_AC3
 #endif
 
+#include "sdrclib/str_replace.h"
 
-void write_stream_size_file(const char file_directory[], const char filename_prefix[], double size) {
-    FILE * outputFile;
-    char fullFileName[1024];
-    snprintf(fullFileName, 1024, "%s/%s.size", file_directory, filename_prefix);
 
-    outputFile = fopen(fullFileName, "w");
-    fprintf(outputFile, "%u", (unsigned int) size);
-    fclose(outputFile);
-}
 
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
     AVCodecContext *input_codec_context;
@@ -146,20 +147,67 @@ int write_index_file(
     return rename(tmp_index, index);
 }
 
+void forcedir(char *path){
+	struct stat st;
+	if (stat(path,&st)!=0){
+		mkdir(path,0777);
+		if (stat(path,&st)!=0){
+			fprintf(stderr, "failed to create archive dir '%s'.\n", path);
+			exit(1);
+		}
+	}
+	if ((st.st_mode & S_IFDIR)!=S_IFDIR){
+		fprintf(stderr, "file %s exists and is not a dir'.\n", path);
+		exit(1);
+	}
+}
+
+char baseDirName [MAX_FILENAME_LENGTH +1];
+char baseFileName [MAX_FILENAME_LENGTH +1];
+char currentOutputDirName  [MAX_FILENAME_LENGTH +1];
+char baseFileExtension[MAXT_EXT_LENGTH+1];
+char currentOutputFileName[MAXT_EXT_LENGTH+1];
+
+struct tm start_time,end_time;
+
+void fillofn (){
+
+	snprintf(currentOutputDirName, MAX_FILENAME_LENGTH, "%s/%d-%02d-%02d", baseDirName, start_time.tm_year,start_time.tm_mon,start_time.tm_mday);
+	
+	forcedir(currentOutputDirName);
+	snprintf(currentOutputFileName,MAX_FILENAME_LENGTH, "%s/%s_%d-%02d-%02d_%02d:%02d:%02d_current%s",currentOutputDirName,baseFileName,start_time.tm_year,start_time.tm_mon,start_time.tm_mday,start_time.tm_hour,start_time.tm_min,start_time.tm_sec,baseFileExtension);
+	
+}
+
+void fixofn(){
+	FNHOLDER(currentOutputFinalName);
+	snprintf(currentOutputFinalName,MAX_FILENAME_LENGTH, 
+		"%s/%s_%d-%02d-%02d_%02d:%02d:%02d_to_%d-%02d-%02d_%02d:%02d:%02d%s",
+		currentOutputDirName,baseFileName,
+		start_time.tm_year,start_time.tm_mon,start_time.tm_mday,start_time.tm_hour,start_time.tm_min,start_time.tm_sec,
+		end_time.tm_year,end_time.tm_mon,end_time.tm_mday,end_time.tm_hour,end_time.tm_min,end_time.tm_sec,
+		baseFileExtension
+	);
+	rename(currentOutputFinalName,currentOutputFinalName);
+	start_time=end_time;
+	fillofn ();
+}
+
 int main(int argc, const char *argv[]) {
 	//input parameters
 	FNHOLDER(inputFilename);
 	FNHOLDER(playlistFilename);
-	FNHOLDER(baseDirName);
-	FNHOLDER(baseFileName);
-
-
-	char baseFileExtension[MAXT_EXT_LENGTH+1];baseFileExtension[MAXT_EXT_LENGTH]=0; //either "ts", "aac" or "mp3"
+	baseDirName [MAX_FILENAME_LENGTH ]=0;
+	baseFileName[MAX_FILENAME_LENGTH ]=0;
+	currentOutputDirName[MAX_FILENAME_LENGTH ]=0;
+	baseFileExtension[MAX_FILENAME_LENGTH ]=0;
+	
+	baseFileExtension[MAXT_EXT_LENGTH]=0; //either "ts", "aac" or "mp3"
 	int segmentLength, quiet, version,usage;
  
 
 
-	FNHOLDER(currentOutputFileName);
+	
 	FNHOLDER(tempPlaylistName);
 
 
@@ -189,6 +237,9 @@ int main(int argc, const char *argv[]) {
 	int i;
 	int listlen;
 	int listofs=1;
+	
+	
+	
 	if ( parseCommandLine(argc, argv,inputFilename, playlistFilename, baseDirName, baseFileName, baseFileExtension, &segmentLength, &listlen, &quiet, &version,&usage) != 0)
 		return 0;
 
@@ -199,10 +250,11 @@ int main(int argc, const char *argv[]) {
 	//fprintf(stderr, "Options parsed: inputFilename:%s playlistFilename:%s baseDirName:%s baseFileName:%s baseFileExtension:%s segmentLength:%d\n",inputFilename,playlistFilename,baseDirName,baseFileName,baseFileExtension,segmentLength );
 
 
-	snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s/%s", baseDirName, playlistFilename);
-	strncpy(playlistFilename, tempPlaylistName, MAX_FILENAME_LENGTH);
-	snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s.tmp", playlistFilename);
-
+	if (listlen>0){
+		snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s/%s", baseDirName, playlistFilename);
+		strncpy(playlistFilename, tempPlaylistName, MAX_FILENAME_LENGTH);
+		snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s.tmp", playlistFilename);
+	}
 
 	if (!quiet) av_log_set_level(AV_LOG_DEBUG);
 
@@ -283,8 +335,14 @@ int main(int argc, const char *argv[]) {
 		fprintf(stderr, "Could not open video decoder, key frames will not be honored.\n");
 	}
 
-	snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
-
+	if (listlen>0){
+		snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
+	} else { //archive mode
+		time_t tmpt=time(NULL);
+		localtime_r(&tmpt,&start_time);
+		fillofn();
+	}
+	
 	if (avio_open(&oc->pb, currentOutputFileName,AVIO_FLAG_WRITE) < 0) {
 		fprintf(stderr, "Could not open '%s'.\n", currentOutputFileName);
 		exit(1);
@@ -354,25 +412,31 @@ int main(int argc, const char *argv[]) {
 		if (iskeyframe &&  packet_time - segment_start_time >= segmentLength - 0.25) { //a keyframe  near or past segmentLength -> SPLIT
 			avio_flush(oc->pb);
 			avio_close(oc->pb);
-			actual_segment_durations[num_segments] = (unsigned int) rint(prev_packet_time - segment_start_time);
-			num_segments++;
-			if (num_segments>listlen) { //move list to exclude last:
-				snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, listofs, baseFileExtension);
-				unlink (currentOutputFileName);
-				listofs++; num_segments--;
-				memmove(actual_segment_durations,actual_segment_durations+1,num_segments*sizeof(actual_segment_durations[0]));
-				
-			}
-			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, (num_segments>=MAX_SEGMENTS));
+			if (listlen>0){
+				actual_segment_durations[num_segments] = (unsigned int) rint(prev_packet_time - segment_start_time);
+				num_segments++;
+				if (num_segments>listlen) { //move list to exclude last:
+					snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, listofs, baseFileExtension);
+					unlink (currentOutputFileName);
+					listofs++; num_segments--;
+					memmove(actual_segment_durations,actual_segment_durations+1,num_segments*sizeof(actual_segment_durations[0]));
+					
+				}
+				write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, (num_segments>=MAX_SEGMENTS));
 
-			if (num_segments==MAX_SEGMENTS) {
-				fprintf(stderr, "Reached \"hard\" max segment number %u. If this is not live stream increase segment duration. If live segmenting set max list lenth (-m ...)\n", MAX_SEGMENTS);
-				break;
+				if (num_segments==MAX_SEGMENTS) {
+					fprintf(stderr, "Reached \"hard\" max segment number %u. If this is not live stream increase segment duration. If live segmenting set max list lenth (-m ...)\n", MAX_SEGMENTS);
+					break;
+				}
+				//struct stat st;
+				//stat(currentOutputFileName, &st);
+				//output_bytes += st.st_size;
+			} else { //archive mode:
+				time_t tmpt;
+				localtime_r(&tmpt,&end_time);
+				fixofn();
 			}
-			//struct stat st;
-			//stat(currentOutputFileName, &st);
-			//output_bytes += st.st_size;
-
+			
 			output_index++;
 			snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
 			if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
@@ -410,10 +474,16 @@ int main(int argc, const char *argv[]) {
 		avio_close(oc->pb);
 		av_free(oc);
 		
-		actual_segment_durations[num_segments] = (unsigned int) rint(packet_time - segment_start_time);
-		if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
-		num_segments++;
-		write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, 1);
+		if (num_segments>0){
+			actual_segment_durations[num_segments] = (unsigned int) rint(packet_time - segment_start_time);
+			if (actual_segment_durations[num_segments] == 0)   actual_segment_durations[num_segments] = 1;
+			num_segments++;
+			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, 1);
+		} else { //archive mode
+			time_t tmpt;
+			localtime_r(&tmpt,&start_time);
+			fixofn();
+		}
 	}
 // 	struct stat st;
 // 	stat(currentOutputFileName, &st);
@@ -422,7 +492,6 @@ int main(int argc, const char *argv[]) {
 
 
 		
-	//write_stream_size_file(baseDirName, baseFileName, output_bytes * 8 / segment_time);
 
 	return 0;
 }
