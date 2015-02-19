@@ -45,9 +45,6 @@
 #define CODEC_ID_AC3 AV_CODEC_ID_AC3
 #endif
 
-#include "sdrclib/str_replace.h"
-
-
 static AVStream *add_output_stream(AVFormatContext *output_format_context, AVStream *input_stream) {
 	AVCodecContext *input_codec_context;
 	AVCodecContext *output_codec_context;
@@ -196,7 +193,12 @@ void fixofn(){
 		end_time.tm_year,end_time.tm_mon,end_time.tm_mday,end_time.tm_hour,end_time.tm_min,end_time.tm_sec,
 		baseFileExtension
 	);
-	rename(currentOutputFinalName,currentOutputFinalName);
+	if (rename(currentOutputFileName,currentOutputFinalName)) {
+		perror("rename");
+		printf ("rename: %s to %s\n",currentOutputFileName,currentOutputFinalName);
+		exit(-1);
+	}
+	
 	start_time=end_time;
 	fillofn ();
 }
@@ -264,7 +266,7 @@ int main(int argc, const char *argv[]) {
 		snprintf(tempPlaylistName, MAX_FILENAME_LENGTH, "%s.tmp", playlistFilename);
 	}
 
-	if (!quiet) av_log_set_level(AV_LOG_DEBUG);
+	//if (!quiet) av_log_set_level(AV_LOG_DEBUG);
 
 	av_register_all();
 	avformat_network_init(); //just to be safe with later version and be able to handle all kind of input urls
@@ -366,8 +368,11 @@ int main(int argc, const char *argv[]) {
 	}
 
 
-	int waitfirstpacket=1;
-	int iskeyframe=0;    
+	int waitfirstpacket=1; 
+	time_t first_frame_sec=time(NULL);
+	time_t c_frame_sec;
+	
+	int iskeyframe=0;     
 	double vid_pts2time=(double)in_video_st->time_base.num / in_video_st->time_base.den;
 	double aud_pts2time=0;
 	if (in_audio_st)  aud_pts2time=(double)in_audio_st->time_base.num / in_audio_st->time_base.den;
@@ -401,6 +406,7 @@ int main(int argc, const char *argv[]) {
 				waitfirstpacket=0;
 				prev_packet_time=packet_time;
 				segment_start_time=packet_time;
+				first_frame_sec=time(NULL);
 			}
 		} else if (packet.stream_index == in_audio_index){
 			packet.stream_index = out_audio_index;
@@ -419,7 +425,7 @@ int main(int argc, const char *argv[]) {
 		
 		//start looking for segment splits for videos one half second before segment duration expires. This is because the 
 		//segments are split on key frames so we cannot expect all segments to be split exactly equally. 
-		if (iskeyframe &&  packet_time - segment_start_time >= segmentLength - 0.25) { //a keyframe  near or past segmentLength -> SPLIT
+		if (iskeyframe &&  ((packet_time - segment_start_time) >= (segmentLength - 0.25)) &&  (time(NULL)!=first_frame_sec)) { //a keyframe  near or past segmentLength -> SPLIT
 			avio_flush(oc->pb);
 			avio_close(oc->pb);
 			if (listlen>0){
@@ -449,7 +455,9 @@ int main(int argc, const char *argv[]) {
 				fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
 				break;
 			} else if (!quiet) fprintf(stderr, "Starting segment '%s'\n", currentOutputFileName);
+			fflush(stderr);
  			segment_start_time = packet_time;
+			first_frame_sec=time(NULL);
 		}
 		if (packet.stream_index == out_video_index) prev_packet_time=packet_time;
 

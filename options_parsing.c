@@ -133,11 +133,10 @@ inputOption getNextOption(int argc, const char * argv[], char * option, int *opt
 		
 		strncpy(option, argv[++optionIndex], MAX_FILENAME_LENGTH );
 
-		//make sure it ends in a slash
-		int l = strnlen(option,MAX_FILENAME_LENGTH - 2);
-		if (option[l - 1] != '/') {
-			option[l] = '/';
-			option[l + 1] = 0;
+		//make sure it does not end in a slash
+		int l = strnlen(option,MAX_FILENAME_LENGTH - 1);
+		if (option[l - 1] == '/') {
+			option[l - 1] = 0;
 		}
 
 		//check for valid file name
