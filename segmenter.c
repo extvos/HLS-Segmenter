@@ -170,6 +170,13 @@ char baseFileExtension[MAXT_EXT_LENGTH+1];
 char currentOutputFileName[MAXT_EXT_LENGTH+1];
 
 struct tm start_time,end_time;
+void localtime_r_ex(struct tm *dst){
+	time_t now=time(NULL);
+	localtime_r(&now,dst);
+	dst->tm_year+=1900;
+	dst->tm_mon++;
+	if (dst->tm_wday==0) dst->tm_wday=7;
+}
 
 void fillofn (){
 
@@ -342,8 +349,7 @@ int main(int argc, const char *argv[]) {
 	if (listlen>0){
 		snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
 	} else { //archive mode
-		time_t tmpt=time(NULL);
-		localtime_r(&tmpt,&start_time);
+		localtime_r_ex(&start_time);
 		fillofn();
 	}
 	
@@ -432,17 +438,13 @@ int main(int argc, const char *argv[]) {
 					fprintf(stderr, "Reached \"hard\" max segment number %u. If this is not live stream increase segment duration. If live segmenting set max list lenth (-m ...)\n", MAX_SEGMENTS);
 					break;
 				}
-				//struct stat st;
-				//stat(currentOutputFileName, &st);
-				//output_bytes += st.st_size;
+				output_index++;
+				snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
 			} else { //archive mode:
-				time_t tmpt;
-				localtime_r(&tmpt,&end_time);
+				localtime_r_ex(&end_time);
 				fixofn();
 			}
 			
-			output_index++;
-			snprintf(currentOutputFileName, MAX_FILENAME_LENGTH, "%s/%s-%u%s", baseDirName, baseFileName, output_index, baseFileExtension);
 			if (avio_open(&oc->pb, currentOutputFileName, AVIO_FLAG_WRITE) < 0) {
 				fprintf(stderr, "Could not open '%s'\n", currentOutputFileName);
 				break;
@@ -484,8 +486,7 @@ int main(int argc, const char *argv[]) {
 			num_segments++;
 			write_index_file(playlistFilename, tempPlaylistName, segmentLength, num_segments,actual_segment_durations, listofs,  baseFileName, baseFileExtension, 1);
 		} else { //archive mode
-			time_t tmpt;
-			localtime_r(&tmpt,&start_time);
+			localtime_r_ex(&end_time);
 			fixofn();
 		}
 	}
