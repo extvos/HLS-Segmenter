@@ -317,7 +317,7 @@ int parseCommandLine(
 				}
 				if (requiredOptions[OUTPUT_FILE_INDEX] == 0) {
 					char *from=inputFile,*to=outputFile,*lastd=NULL,cc,*rebase=NULL; 
-					while (cc=*from) {
+					while ((cc=*from)) {
 						from++;
 						*to=cc;
 						if (cc=='.') lastd=to;
@@ -347,7 +347,7 @@ int parseCommandLine(
 
 				if (requiredOptions[OUTPUT_BASE_NAME_INDEX] == 0) {
 					char *from=outputFile,*to=baseName,*lastd=NULL,cc; 
-					while (cc=*from) {
+					while ((cc=*from)) {
 						from++;
 						*to=cc;
 						if (cc=='.') lastd=to;

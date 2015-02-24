@@ -1,6 +1,6 @@
 project(httplvs-sd)
 cmake_minimum_required(VERSION 2.6)
-
+ADD_DEFINITIONS (-Wall)
 include(detectFFMpeg.cmake)
 
 include_directories(../)

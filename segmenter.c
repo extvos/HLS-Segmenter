@@ -226,9 +226,6 @@ int main(int argc, const char *argv[]) {
 	unsigned int actual_segment_durations[MAX_SEGMENTS+1];
 	double packet_time = 0;
 
-	//new variables to keep track of output size
-	double output_bytes = 0;
-
 	unsigned int output_index = 1;
 	AVOutputFormat *ofmt;
 	AVFormatContext *ic = NULL;
@@ -239,9 +236,8 @@ int main(int argc, const char *argv[]) {
 	AVStream *out_audio_st = NULL;
 	AVCodec *codec;
 
-	unsigned int first_segment = 1;
 	unsigned int num_segments = 0;
-	int write_index = 1;
+
 	int decode_done;
 	int ret;
 	int i;
@@ -370,12 +366,13 @@ int main(int argc, const char *argv[]) {
 
 	int waitfirstpacket=1; 
 	time_t first_frame_sec=time(NULL);
-	time_t c_frame_sec;
 	
 	int iskeyframe=0;     
 	double vid_pts2time=(double)in_video_st->time_base.num / in_video_st->time_base.den;
-	double aud_pts2time=0;
-	if (in_audio_st)  aud_pts2time=(double)in_audio_st->time_base.num / in_audio_st->time_base.den;
+	
+	//double aud_pts2time=0;
+	//if (in_audio_st)  aud_pts2time=(double)in_audio_st->time_base.num / in_audio_st->time_base.den;
+	
 	
 	double prev_packet_time=0;
 	do {
