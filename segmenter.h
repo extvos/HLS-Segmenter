@@ -32,7 +32,7 @@ extern "C" {
 #define PROGRAM_VERSION "0.2"
 
 #define MAX_SEGMENTS 2048
-#define MAX_FILENAME_LENGTH 1024
+#define MAX_FILENAME_LENGTH 2048
 #define MAXT_EXT_LENGTH 9
 //type of output to perform
 #define OUTPUT_STREAM_AUDIO 1

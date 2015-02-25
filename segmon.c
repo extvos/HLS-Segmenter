@@ -84,6 +84,7 @@ int easyparse_cb (void*userdata,  char *name, int namel, char *value, int valuel
 		if (csegm->argc<MAXPARAMS ){
 			csegm->argv[csegm->argc++]="-m";
 			csegm->argv[csegm->argc++]=value;
+			if (valuel==1 && *value=='a') csegm->argv[1]="-f";
 		} else {
 			printf ("too many segmenter params! (hard limit is %d)\n",MAXPARAMS);
 			return 1;
@@ -184,9 +185,14 @@ int main (int argc,char * argv[] ){
 		printf ("no stream=.... in config! Nothing to monitor!\n");
 		exit (1);
 	}
-	int x;
+	int x,y;
 	for(x=0;x<MAXSEGMETERS;x++){
 		if (segmenters[x].inuse==0) break;
+
+		printf ("MONITOR: starting:");
+		for (y=0; y<segmenters[x].argc;y++) printf("%s ",segmenters[x].argv[y]);
+		printf ("\n");
+
 		segmenters[x].child=fork();
 		if (segmenters[x].child==0){
 			sleep(1);
@@ -194,8 +200,7 @@ int main (int argc,char * argv[] ){
 		} else {
 			printf("child for strm %s started pid %d!\n",segmenters[x].strm,segmenters[x].child);
 		}
-		//for (y=0; y<segmenters[x].argc;y++) printf("%s ",segmenters[x].argv[y]);
-		//printf ("\n");
+
 	}
 	printf("waiting...\n");
 	while (getchar()!='q') {

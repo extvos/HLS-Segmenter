@@ -164,7 +164,7 @@ char baseDirName [MAX_FILENAME_LENGTH +1];
 char baseFileName [MAX_FILENAME_LENGTH +1];
 char currentOutputDirName  [MAX_FILENAME_LENGTH +1];
 char baseFileExtension[MAXT_EXT_LENGTH+1];
-char currentOutputFileName[MAXT_EXT_LENGTH+1];
+char currentOutputFileName[MAX_FILENAME_LENGTH+1];
 
 struct tm start_time,end_time;
 void localtime_r_ex(struct tm *dst){
@@ -180,24 +180,24 @@ void fillofn (){
 	snprintf(currentOutputDirName, MAX_FILENAME_LENGTH, "%s/%d-%02d-%02d", baseDirName, start_time.tm_year,start_time.tm_mon,start_time.tm_mday);
 	
 	forcedir(currentOutputDirName);
-	snprintf(currentOutputFileName,MAX_FILENAME_LENGTH, "%s/%s_%d-%02d-%02d_%02d:%02d:%02d_current%s",currentOutputDirName,baseFileName,start_time.tm_year,start_time.tm_mon,start_time.tm_mday,start_time.tm_hour,start_time.tm_min,start_time.tm_sec,baseFileExtension);
+	snprintf(currentOutputFileName,MAX_FILENAME_LENGTH, "%s/%s_%d-%02d-%02d_%02d.%02d.%02d_current%s",currentOutputDirName,baseFileName,start_time.tm_year,start_time.tm_mon,start_time.tm_mday,start_time.tm_hour,start_time.tm_min,start_time.tm_sec,baseFileExtension);
 	
 }
 
 void fixofn(){
 	FNHOLDER(currentOutputFinalName);
 	snprintf(currentOutputFinalName,MAX_FILENAME_LENGTH, 
-		"%s/%s_%d-%02d-%02d_%02d:%02d:%02d_to_%d-%02d-%02d_%02d:%02d:%02d%s",
+		"%s/%s_%d-%02d-%02d_%02d.%02d.%02d_to_%d-%02d-%02d_%02d.%02d.%02d%s",
 		currentOutputDirName,baseFileName,
 		start_time.tm_year,start_time.tm_mon,start_time.tm_mday,start_time.tm_hour,start_time.tm_min,start_time.tm_sec,
 		end_time.tm_year,end_time.tm_mon,end_time.tm_mday,end_time.tm_hour,end_time.tm_min,end_time.tm_sec,
 		baseFileExtension
 	);
+	printf ("rename: %s to %s\n",currentOutputFileName,currentOutputFinalName);
 	if (rename(currentOutputFileName,currentOutputFinalName)) {
 		perror("rename");
-		printf ("rename: %s to %s\n",currentOutputFileName,currentOutputFinalName);
 		exit(-1);
-	}
+	} 
 	
 	start_time=end_time;
 	fillofn ();
@@ -518,9 +518,8 @@ while(1) {
 // 	struct stat st;
 // 	stat(currentOutputFileName, &st);
 // 	output_bytes += st.st_size;
-	if (!persist) break;
 	avformat_close_input(&ic);
-	sleep(1);
+	break;
 }
 
 		
