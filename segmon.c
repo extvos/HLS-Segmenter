@@ -49,10 +49,11 @@ int easyparse_cb (void*userdata,  char *name, int namel, char *value, int valuel
 		}
 		csegm->inuse=1;
 		csegm->strm=value;
-		csegm->argc=3;
+		csegm->argc=4;
 		csegm->argv[0]=segmenter;
 		csegm->argv[1]="-o";
 		csegm->argv[2]=value;
+		csegm->argv[3]="-p";
 	} else if (namel==7 && memcmp(name,"plsfile",7)==0) {//fix -o value:
 		csegm->argv[2]=value;
 	} else if (csegm && namel==5 && memcmp(name,"input",5)==0) {
@@ -114,28 +115,18 @@ int easyparse_cb (void*userdata,  char *name, int namel, char *value, int valuel
 
 static void handle_sigchld(int signum, siginfo_t *sinfo, void *unused){
     int sav_errno = errno;
-    int status;
 
     /*
      * Obtain status information for the child which
      * caused the SIGCHLD signal and write its exit code
      * to stdout.
     */
-    if (sinfo->si_code != CLD_EXITED)  {
-        printf ("wrong si_code\n");
-    } else if (waitpid(sinfo->si_pid, &status, 0) == -1)  {
-        printf ("waitpid() failed\n");
-    } else if (!WIFEXITED(status)) {
-        printf ("WIFEXITED was false\n");
-    } else {
-        int excode = WEXITSTATUS(status);
-		printf ("exit code:%d pid:%d\n",excode,sinfo->si_pid);
-		int x;
-		for(x=0;x<MAXSEGMETERS;x++){
-			if (segmenters[x].inuse==0) break;
-			if (segmenters[x].child==sinfo->si_pid) segmenters[x].child=0;
-		}
-    }
+	printf ("bang goes  pid:%d\n",sinfo->si_pid);
+	int x;
+	for(x=0;x<MAXSEGMETERS;x++){
+		if (segmenters[x].inuse==0) break;
+		if (segmenters[x].child==sinfo->si_pid) segmenters[x].child=0;
+	}
     errno = sav_errno;
 }
 
