@@ -21,6 +21,7 @@ typedef struct {
 	int inuse;
 	pid_t child;
 	int argc ;
+	const char * strm;
 	const char * argv[MAXPARAMS+3];
 	char segl[SEGLSZ];
 } segmenter_t;
@@ -47,6 +48,7 @@ int easyparse_cb (void*userdata,  char *name, int namel, char *value, int valuel
 			return 1;
 		}
 		csegm->inuse=1;
+		csegm->strm=value;
 		csegm->argc=3;
 		csegm->argv[0]=segmenter;
 		csegm->argv[1]="-o";
@@ -127,7 +129,12 @@ static void handle_sigchld(int signum, siginfo_t *sinfo, void *unused){
         printf ("WIFEXITED was false\n");
     } else {
         int excode = WEXITSTATUS(status);
-        printf ("exit code:%d\n",excode);
+		printf ("exit code:%d pid:%d\n",excode,sinfo->si_pid);
+		int x;
+		for(x=0;x<MAXSEGMETERS;x++){
+			if (segmenters[x].inuse==0) break;
+			if (segmenters[x].child==sinfo->si_pid) segmenters[x].child=0;
+		}
     }
     errno = sav_errno;
 }
@@ -186,12 +193,37 @@ int main (int argc,char * argv[] ){
 		printf ("no stream=.... in config! Nothing to monitor!\n");
 		exit (1);
 	}
-	int x,y;
+	int x;
 	for(x=0;x<MAXSEGMETERS;x++){
 		if (segmenters[x].inuse==0) break;
-		for (y=0; y<segmenters[x].argc;y++) printf("%s ",segmenters[x].argv[y]);
-		printf ("\n");
+		segmenters[x].child=fork();
+		if (segmenters[x].child==0){
+			sleep(1);
+			execvp(segmenters[x].argv[0],(char * const *)segmenters[x].argv);
+		} else {
+			printf("child for strm %s started pid %d!\n",segmenters[x].strm,segmenters[x].child);
+		}
+		//for (y=0; y<segmenters[x].argc;y++) printf("%s ",segmenters[x].argv[y]);
+		//printf ("\n");
 	}
+	printf("waiting...\n");
+	while (getchar()!='q') {
+		printf("wup!\n");
+		sleep(1);
+		for(x=0;x<MAXSEGMETERS;x++){
+			if (segmenters[x].inuse==0) break;
+			if (segmenters[x].child==0) {
+				segmenters[x].child=fork();
+				if (segmenters[x].child==0){
+					sleep(1);
+					execvp(segmenters[x].argv[0],(char * const *)segmenters[x].argv);
+				} else {
+					printf("child for strm %s REstarted pid %d!\n",segmenters[x].strm,segmenters[x].child);
+				}
+			}
+		}
+	}
+	printf("waiting over!\n");
 	
 	return 0;
 }

@@ -227,7 +227,7 @@ int main(int argc, const char *argv[]) {
 	double packet_time = 0;
 
 	unsigned int output_index = 1;
-	AVOutputFormat *ofmt;
+	AVOutputFormat *ofmt=NULL;
 	AVFormatContext *ic = NULL;
 	AVFormatContext *oc;
 	AVStream *in_video_st = NULL;
@@ -243,10 +243,10 @@ int main(int argc, const char *argv[]) {
 	int i;
 	int listlen;
 	int listofs=1;
+	int persist=0;
 	
 	
-	
-	if ( parseCommandLine(argc, argv,inputFilename, playlistFilename, baseDirName, baseFileName, baseFileExtension, &segmentLength, &listlen, &quiet, &version,&usage) != 0)
+	if ( parseCommandLine(argc, argv,inputFilename, playlistFilename, baseDirName, baseFileName, baseFileExtension, &segmentLength, &listlen, &quiet, &version,&usage,&persist) != 0)
 		return 0;
 
 	if (usage) printUsage();
@@ -267,21 +267,35 @@ int main(int argc, const char *argv[]) {
 	av_register_all();
 	avformat_network_init(); //just to be safe with later version and be able to handle all kind of input urls
 	
-	
+while(1) {
 	ret = avformat_open_input(&ic, inputFilename, NULL, NULL);
 	if (ret != 0) {
+		if (persist) {
+			sleep(1);
+			continue;
+		}
 		fprintf(stderr, "Could not open input file %s. Error %d.\n", inputFilename, ret);
 		exit(1);
 	}
 
 	if (avformat_find_stream_info(ic, NULL) < 0) {
 		fprintf(stderr, "Could not read stream information.\n");
+		if (persist){
+			avformat_close_input(&ic);
+			sleep(1);
+			continue;
+		}
 		exit(1);
 	}
 
 	oc = avformat_alloc_context();
 	if (!oc) {
 		fprintf(stderr, "Could not allocate output context.");
+		if (persist){
+			avformat_close_input(&ic);
+			sleep(1);
+			continue;
+		}
 		exit(1);
 	}
 
@@ -318,11 +332,17 @@ int main(int argc, const char *argv[]) {
 
 	if (in_video_index == -1) {
 		fprintf(stderr, "Source stream must have video component.\n");
+		if (persist){
+			avformat_close_input(&ic);
+			avformat_free_context(oc);
+			sleep(1);
+			continue;
+		}
 		exit(1);
 	}
 
 
-	ofmt = av_guess_format("mpegts", NULL, NULL);
+	if (!ofmt) ofmt = av_guess_format("mpegts", NULL, NULL);
 	if (!ofmt) {
 		fprintf(stderr, "Could not find MPEG-TS muxer.\n");
 		exit(1);
@@ -498,8 +518,10 @@ int main(int argc, const char *argv[]) {
 // 	struct stat st;
 // 	stat(currentOutputFileName, &st);
 // 	output_bytes += st.st_size;
-
-
+	if (!persist) break;
+	avformat_close_input(&ic);
+	sleep(1);
+}
 
 		
 

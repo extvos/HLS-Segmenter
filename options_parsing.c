@@ -34,7 +34,7 @@
 typedef enum {
 	INPUT_FILE, OUTPUT_FILE, OUTPUT_DIR, OUTPUT_BASE_NAME,SEGMENT_LENGTH, LIST_LENGTH,
 	
-	QUIET, VERSION, PRINT_USAGE,
+	QUIET,PERSISTENT, VERSION, PRINT_USAGE,
 	
 	NO_MORE_OPTIONS,INVALID
 	
@@ -64,6 +64,8 @@ void printUsage() {
 					"-f <baseFileName>\tSegment files will be named <baseFileName>-#. Default is <outfile>\n"
 					"-l <segment length>\tThe length of each segment. Default is 5\n"
 					"-m <maximal list length>\tThe length of produced list. Default is - no limit. \"Hard\"  limit  at %u\n"
+					"\t\t\t -m a will enable archive mode\n"
+					"-p \tenable persistent reconnect to source\n"
 					"--version\t\tPrint version details and exit.\n"
 					"-q,--quiet\t\tTry to be more quiet.\n"
 					"-h,--help\t\tPrint this info.\n"
@@ -172,7 +174,11 @@ inputOption getNextOption(int argc, const char * argv[], char * option, int *opt
 		optionIndex++;
 		return QUIET;
 	}
-
+	if (strcmp(argv[optionIndex],"-p")==0 || strcmp(argv[optionIndex],"--p" )==0|| strcmp(argv[optionIndex],"--persistent")==0) {
+		optionIndex++;
+		return PERSISTENT;
+	}
+	
 
 	if (strcmp(argv[optionIndex],"-l")==0 || strcmp(argv[optionIndex],"--l")==0) {
 		if (!hasnext){
@@ -253,7 +259,7 @@ int parseCommandLine(
 	
 	char * inputFile, char * outputFile, char * baseDir, char * baseName, char * baseExtension, int * segmentLength, int *listlen,
 	
-	int * quiet, int * version, int * usage
+	int * quiet, int * version, int * usage, int *persistent
 	
 ) {
 	printBanner();
@@ -266,6 +272,7 @@ int parseCommandLine(
 	*quiet = 0;
 	*version = 0;
 	*usage = 0;
+	*persistent=0;
 	*segmentLength=5;
 	strncpy(baseExtension, ".ts",MAXT_EXT_LENGTH);
 	baseDir[0]='.';baseDir[1]=0;
@@ -295,6 +302,9 @@ int parseCommandLine(
 				*listlen = optioni;
 			case QUIET:
 				*quiet = 1;
+				break;
+			case PERSISTENT:
+				*persistent = 1;
 				break;
 			case VERSION:
 				*version = 1;
