@@ -113,24 +113,30 @@ int easyparse_cb (void*userdata,  char *name, int namel, char *value, int valuel
 	return 0;
 }
 
-
-static void handle_sigchld(int signum, siginfo_t *sinfo, void *unused){
-    int sav_errno = errno;
-
-    /*
-     * Obtain status information for the child which
-     * caused the SIGCHLD signal and write its exit code
-     * to stdout.
-    */
-	printf ("bang goes  pid:%d\n",sinfo->si_pid);
+void cleanchilds(pid_t pid){
+	
 	int x;
 	for(x=0;x<MAXSEGMETERS;x++){
 		if (segmenters[x].inuse==0) break;
-		if (segmenters[x].child==sinfo->si_pid) segmenters[x].child=0;
+		if (segmenters[x].child==pid) segmenters[x].child=0;
+	}
+}
+
+int volatile signaled=0;
+static void handle_sigterm(int signum, siginfo_t *sinfo, void *unused){
+	signaled=1;
+}
+
+static void handle_sigchld(int signum, siginfo_t *sinfo, void *unused){
+    int sav_errno = errno;
+	if (sinfo->si_code == CLD_EXITED) {
+		int status;
+		if  ( waitpid(sinfo->si_pid, &status, WNOHANG) != -1){
+			if (WIFEXITED(status)||WIFSIGNALED(status))cleanchilds(sinfo->si_pid);
+		}
 	}
     errno = sav_errno;
 }
-
 
 int main (int argc,char * argv[] ){
 	segmenter=DEFSEGMENTER;
@@ -181,6 +187,29 @@ int main (int argc,char * argv[] ){
         exit(EXIT_FAILURE);
     }
     
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = handle_sigterm;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGHUP, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGQUIT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGABRT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+    
 	if (csegm==NULL) {
 		printf ("no stream=.... in config! Nothing to monitor!\n");
 		exit (1);
@@ -203,9 +232,10 @@ int main (int argc,char * argv[] ){
 
 	}
 	printf("waiting...\n");
-	while (getchar()!='q') {
-		printf("wup!\n");
-		sleep(1);
+	while (!signaled) {
+		int status;
+		pid_t pid=waitpid((pid_t)0,&status,0);
+		if (pid>0 && (WIFEXITED(status)||WIFSIGNALED(status))) cleanchilds(pid);
 		for(x=0;x<MAXSEGMETERS;x++){
 			if (segmenters[x].inuse==0) break;
 			if (segmenters[x].child==0) {
