@@ -9,6 +9,7 @@
 #include <errno.h>
 
 #include "sdrclib/easyparse.h"
+#include "sdrclib/daemonize.h"
 
 #define CFGFILE "segmon.cfg"
 
@@ -137,16 +138,28 @@ static void handle_sigchld(int signum, siginfo_t *sinfo, void *unused){
 	}
     errno = sav_errno;
 }
-
+#define usage(pname) { fprintf (stderr,"Usage: %s  [-c <config file>] [-p <pidfile>]\n   Default config is "CFGFILE" passing -p trigers deamon mode",pname); exit (1); }
 int main (int argc,char * argv[] ){
 	segmenter=DEFSEGMENTER;
 	memset(segmenters,0,sizeof(segmenters));
 	csegm=NULL;
 	
-	if (argc>1){
-		cfgfile=argv[1];
-	}
 	
+	int c;
+	char * pidfile=NULL;
+	while ((c = getopt (argc, argv, "c:p:")) != -1) switch (c) {
+		case 'c':
+			cfgfile = optarg;
+			break;
+		case 'p':
+			pidfile = optarg;
+			break;
+		case '?':
+			usage (argv[0]);
+			break;
+		default:
+			usage (argv[0]);
+	}
 	
 	printf("using scfg file %s\n",cfgfile);
 	struct stat st;
@@ -176,6 +189,8 @@ int main (int argc,char * argv[] ){
 
 	easyparse(cfg,st.st_size,easyparse_cb,NULL);
 	
+	if (pidfile) daemonize("/dev/null","/dev/null","/dev/null",pidfile);
+		
     struct sigaction sa;
 
     sa.sa_flags = SA_SIGINFO;
