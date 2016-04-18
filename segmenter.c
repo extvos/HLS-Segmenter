@@ -407,7 +407,7 @@ while(1) {
 		//a potential memory leak:
 	//         if (av_dup_packet(&packet) < 0) {
 	//             fprintf(stderr, "Could not duplicate packet.");
-	//             av_free_packet(&packet);
+	//             av_packet_unref(&packet);
 	//             break;
 	//         }
 
@@ -430,13 +430,13 @@ while(1) {
 			iskeyframe=0;
 		} else {
 			//how this got here?!
-			av_free_packet(&packet);
+			av_packet_unref(&packet);
 			continue;
 		}
 
 		
 		if (waitfirstpacket) {
-			av_free_packet(&packet);
+			av_packet_unref(&packet);
 			continue;
 		}
 		
@@ -484,11 +484,11 @@ while(1) {
 			fprintf(stderr, "Warning: Could not write frame of stream.\n");
 		} else if (ret > 0) {
 			fprintf(stderr, "End of stream requested.\n");
-			av_free_packet(&packet);
+			av_packet_unref(&packet);
 			break;
 		}
 
-		av_free_packet(&packet);
+		av_packet_unref(&packet);
 	} while (!decode_done);
 
 	if (in_video_st->codec->codec !=NULL) avcodec_close(in_video_st->codec);
